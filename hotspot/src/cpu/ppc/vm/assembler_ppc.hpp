@@ -1807,6 +1807,7 @@ class Assembler : public AbstractAssembler {
   inline void stvxl(    VectorRegister d, Register s1, Register s2);
   inline void lvsl(     VectorRegister d, Register s1, Register s2);
   inline void lvsr(     VectorRegister d, Register s1, Register s2);
+
   inline void vpkpx(    VectorRegister d, VectorRegister a, VectorRegister b);
   inline void vpkshss(  VectorRegister d, VectorRegister a, VectorRegister b);
   inline void vpkswss(  VectorRegister d, VectorRegister a, VectorRegister b);
@@ -1945,6 +1946,8 @@ class Assembler : public AbstractAssembler {
   inline void mtfprd(   FloatRegister   d, Register a);
   inline void mtfprwa(  FloatRegister   d, Register a);
   inline void mffprd(   Register        a, FloatRegister d);
+  inline void mtvrd(    VectorRegister  d, Register a);
+  inline void mfvrd(    Register        a, VectorRegister d);
 
   // AES (introduced with Power 8)
   inline void vcipher(     VectorRegister d, VectorRegister a, VectorRegister b);
