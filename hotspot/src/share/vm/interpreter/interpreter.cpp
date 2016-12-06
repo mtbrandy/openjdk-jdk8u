@@ -195,6 +195,7 @@ AbstractInterpreter::MethodKind AbstractInterpreter::method_kind(methodHandle m)
     return kind;
   }
 
+#ifndef TARGET_ARCH_ppc
 #ifndef CC_INTERP
   if (UseCRC32Intrinsics && m->is_native()) {
     // Use optimized stub code for CRC32 native methods.
@@ -204,6 +205,7 @@ AbstractInterpreter::MethodKind AbstractInterpreter::method_kind(methodHandle m)
       case vmIntrinsics::_updateByteBufferCRC32  : return java_util_zip_CRC32_updateByteBuffer;
     }
   }
+#endif
 #endif
 
   // Native method?
