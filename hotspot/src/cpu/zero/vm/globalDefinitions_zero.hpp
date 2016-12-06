@@ -1,6 +1,6 @@
 /*
- * Copyright (c) 1997, 2010, Oracle and/or its affiliates. All rights reserved.
- * Copyright 2009 Red Hat, Inc.
+ * Copyright (c) 1997, 2015, Oracle and/or its affiliates. All rights reserved.
+ * Copyright 2009, 2015, Red Hat, Inc.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -29,9 +29,7 @@
 #include <ffi.h>
 
 // Indicates whether the C calling conventions require that
-// 32-bit integer argument values are properly extended to 64 bits.
-// If set, SharedRuntime::c_calling_convention() must adapt
-// signatures accordingly.
+// 32-bit integer argument values are extended to 64 bits.
 const bool CCallingConventionRequiresIntsAsLongs = false;
 
 #endif // CPU_ZERO_VM_GLOBALDEFINITIONS_ZERO_HPP
