@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 1999, 2013, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 1999, 2015, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -72,16 +72,18 @@ void GraphKit::gen_stub(address C_function,
 
   // Make up the parameters
   uint i;
-  for( i = 0; i < parm_cnt; i++ )
+  for (i = 0; i < parm_cnt; i++) {
     map()->init_req(i, _gvn.transform(new (C) ParmNode(start, i)));
-  for( ; i<map()->req(); i++ )
+  }
+  for ( ; i<map()->req(); i++) {
     map()->init_req(i, top());      // For nicer debugging
+  }
 
   // GraphKit requires memory to be a MergeMemNode:
   set_all_memory(map()->memory());
 
   // Get base of thread-local storage area
-  Node* thread = _gvn.transform( new (C) ThreadLocalNode() );
+  Node* thread = _gvn.transform(new (C) ThreadLocalNode());
 
   const int NoAlias = Compile::AliasIdxBot;
 
@@ -113,24 +115,26 @@ void GraphKit::gen_stub(address C_function,
 
   //-----------------------------
   // Compute signature for C call.  Varies from the Java signature!
+
   const Type **fields = TypeTuple::fields(2*parm_cnt+2);
   uint cnt = TypeFunc::Parms;
   // The C routines gets the base of thread-local storage passed in as an
-  // extra argument.  Not all calls need it, but its cheap to add here.
+  // extra argument. Not all calls need it, but it is cheap to add here.
   for (uint pcnt = cnt; pcnt < parm_cnt; pcnt++, cnt++) {
-    // Convert ints to longs if required.
-    if (CCallingConventionRequiresIntsAsLongs && jdomain->field_at(pcnt)->isa_int()) {
+    const Type *f = jdomain->field_at(pcnt);
+    if (CCallingConventionRequiresIntsAsLongs && f->isa_int()) {
       fields[cnt++] = TypeLong::LONG;
-      fields[cnt]   = Type::HALF; // must add an additional half for a long
+      fields[cnt] = Type::HALF; // Must add an additional half for a long.
     } else {
-      fields[cnt] = jdomain->field_at(pcnt);
+      fields[cnt] = f;
     }
   }
 
   fields[cnt++] = TypeRawPtr::BOTTOM; // Thread-local storage
   // Also pass in the caller's PC, if asked for.
-  if( return_pc )
+  if (return_pc) {
     fields[cnt++] = TypeRawPtr::BOTTOM; // Return PC
+  }
 
   const TypeTuple* domain = TypeTuple::make(cnt,fields);
   // The C routine we are about to call cannot return an oop; it can block on
@@ -143,58 +147,59 @@ void GraphKit::gen_stub(address C_function,
   const Type **rfields = TypeTuple::fields(jrange->cnt() - TypeFunc::Parms);
   // Fixup oop returns
   int retval_ptr = retval->isa_oop_ptr();
-  if( retval_ptr ) {
+  if( retval_ptr) {
     assert( pass_tls, "Oop must be returned thru TLS" );
     // Fancy-jumps return address; others return void
     rfields[TypeFunc::Parms] = is_fancy_jump ? TypeRawPtr::BOTTOM : Type::TOP;
 
-  } else if( retval->isa_int() ) { // Returning any integer subtype?
+  } else if(retval->isa_int()) { // Returning any integer subtype?
     // "Fatten" byte, char & short return types to 'int' to show that
     // the native C code can return values with junk high order bits.
     // We'll sign-extend it below later.
     rfields[TypeFunc::Parms] = TypeInt::INT; // It's "dirty" and needs sign-ext
 
-  } else if( jrange->cnt() >= TypeFunc::Parms+1 ) { // Else copy other types
+  } else if(jrange->cnt() >= TypeFunc::Parms+1) { // Else copy other types
     rfields[TypeFunc::Parms] = jrange->field_at(TypeFunc::Parms);
-    if( jrange->cnt() == TypeFunc::Parms+2 )
+    if(jrange->cnt() == TypeFunc::Parms+2)
       rfields[TypeFunc::Parms+1] = jrange->field_at(TypeFunc::Parms+1);
   }
-  const TypeTuple* range = TypeTuple::make(jrange->cnt(),rfields);
+  const TypeTuple* range = TypeTuple::make(jrange->cnt(), rfields);
 
   // Final C signature
-  const TypeFunc *c_sig = TypeFunc::make(domain,range);
+  const TypeFunc *c_sig = TypeFunc::make(domain, range);
 
   //-----------------------------
-  // Make the call node
+  // Make the call node.
   CallRuntimeNode *call = new (C)
     CallRuntimeNode(c_sig, C_function, name, TypePtr::BOTTOM);
   //-----------------------------
 
-  // Fix-up the debug info for the call
-  call->set_jvms( new (C) JVMState(0) );
+  // Fix-up the debug info for the call.
+  call->set_jvms(new (C) JVMState(0));
   call->jvms()->set_bci(0);
   call->jvms()->set_offsets(cnt);
 
-  // Set fixed predefined input arguments
+  // Set fixed predefined input arguments.
   cnt = 0;
-  for (i = 0; i < TypeFunc::Parms; i++)
+  for (i = 0; i < TypeFunc::Parms; i++) {
     call->init_req(cnt++, map()->in(i));
-  // A little too aggressive on the parm copy; return address is not an input
+  }
+  // A little too aggressive on the parm copy; return address is not an input.
   call->set_req(TypeFunc::ReturnAdr, top());
-  for (; i < parm_cnt; i++) { // Regular input arguments
-    // Convert ints to longs if required.
-    if (CCallingConventionRequiresIntsAsLongs && jdomain->field_at(i)->isa_int()) {
-      Node* int_as_long = _gvn.transform(new (C) ConvI2LNode(map()->in(i)));
-      call->init_req(cnt++, int_as_long); // long
-      call->init_req(cnt++, top());       // half
+  for (; i < parm_cnt; i++) { // Regular input arguments.
+    const Type *f = jdomain->field_at(i);
+    if (CCallingConventionRequiresIntsAsLongs && f->isa_int()) {
+      call->init_req(cnt++, _gvn.transform(new (C) ConvI2LNode(map()->in(i))));
+      call->init_req(cnt++, top());
     } else {
       call->init_req(cnt++, map()->in(i));
     }
   }
+  call->init_req(cnt++, thread);
+  if (return_pc) {             // Return PC, if asked for.
+    call->init_req(cnt++, returnadr());
+  }
 
-  call->init_req( cnt++, thread );
-  if( return_pc )             // Return PC, if asked for
-    call->init_req( cnt++, returnadr() );
   _gvn.transform_no_reclaim(call);
 
 
