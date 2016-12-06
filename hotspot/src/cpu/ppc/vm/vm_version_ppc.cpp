@@ -149,10 +149,12 @@ void VM_Version::initialize() {
 
   assert(AllocatePrefetchStyle >= 0, "AllocatePrefetchStyle should be positive");
 
-  if (UseCRC32Intrinsics) {
-    if (!FLAG_IS_DEFAULT(UseCRC32Intrinsics))
-      warning("CRC32 intrinsics  are not available on this CPU");
-    FLAG_SET_DEFAULT(UseCRC32Intrinsics, false);
+  // Implementation does not use any of the vector instructions
+  // available with Power8. Their exploitation is still pending.
+  if (!UseCRC32Intrinsics) {
+    if (FLAG_IS_DEFAULT(UseCRC32Intrinsics)) {
+      FLAG_SET_DEFAULT(UseCRC32Intrinsics, true);
+    }
   }
 
   // The AES intrinsic stubs require AES instruction support.
@@ -452,6 +454,7 @@ void VM_Version::determine_features() {
   a->popcntw(R7, R5);                          // code[7] -> popcntw
   a->fcfids(F3, F4);                           // code[8] -> fcfids
   a->vand(VR0, VR0, VR0);                      // code[9] -> vand
+  a->vpmsumb(VR0, VR1, VR2);                   // code[11] -> vpmsumb
   a->blr();
 
   // Emit function to set one cache line to zero. Emit function descriptor and get pointer to it.
@@ -495,6 +498,7 @@ void VM_Version::determine_features() {
   if (code[feature_cntr++]) features |= popcntw_m;
   if (code[feature_cntr++]) features |= fcfids_m;
   if (code[feature_cntr++]) features |= vand_m;
+  if (code[feature_cntr++]) features |= vpmsumb_m;
 
   // Print the detection code.
   if (PrintAssembly) {
