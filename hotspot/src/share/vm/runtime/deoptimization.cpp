@@ -91,7 +91,8 @@ Deoptimization::UnrollBlock::UnrollBlock(int  size_of_deoptimized_frame,
                                          int  number_of_frames,
                                          intptr_t* frame_sizes,
                                          address* frame_pcs,
-                                         BasicType return_type) {
+                                         BasicType return_type,
+                                         int exec_mode) {
   _size_of_deoptimized_frame = size_of_deoptimized_frame;
   _caller_adjustment         = caller_adjustment;
   _caller_actual_parameters  = caller_actual_parameters;
@@ -103,7 +104,7 @@ Deoptimization::UnrollBlock::UnrollBlock(int  size_of_deoptimized_frame,
   _initial_info              = 0;
   // PD (x86 only)
   _counter_temp              = 0;
-  _unpack_kind               = 0;
+  _unpack_kind               = exec_mode;
   _sender_sp_temp            = 0;
 
   _total_frame_sizes         = size_of_frames();
@@ -151,7 +152,7 @@ void Deoptimization::UnrollBlock::print() {
 // ResetNoHandleMark and HandleMark were removed from it. The actual reallocation
 // of previously eliminated objects occurs in realloc_objects, which is
 // called from the method fetch_unroll_info_helper below.
-JRT_BLOCK_ENTRY(Deoptimization::UnrollBlock*, Deoptimization::fetch_unroll_info(JavaThread* thread))
+JRT_BLOCK_ENTRY(Deoptimization::UnrollBlock*, Deoptimization::fetch_unroll_info(JavaThread* thread, int exec_mode))
   // It is actually ok to allocate handles in a leaf method. It causes no safepoints,
   // but makes the entry a little slower. There is however a little dance we have to
   // do in debug mode to get around the NoHandleMark code in the JRT_LEAF macro
@@ -162,12 +163,12 @@ JRT_BLOCK_ENTRY(Deoptimization::UnrollBlock*, Deoptimization::fetch_unroll_info(
   // decremented at the end of unpack_frames().
   thread->inc_in_deopt_handler();
 
-  return fetch_unroll_info_helper(thread);
+  return fetch_unroll_info_helper(thread, exec_mode);
 JRT_END
 
 
 // This is factored, since it is both called from a JRT_LEAF (deoptimization) and a JRT_ENTRY (uncommon_trap)
-Deoptimization::UnrollBlock* Deoptimization::fetch_unroll_info_helper(JavaThread* thread) {
+Deoptimization::UnrollBlock* Deoptimization::fetch_unroll_info_helper(JavaThread* thread, int exec_mode) {
 
   // Note: there is a safepoint safety issue here. No matter whether we enter
   // via vanilla deopt or uncommon trap we MUST NOT stop at a safepoint once
@@ -488,7 +489,8 @@ Deoptimization::UnrollBlock* Deoptimization::fetch_unroll_info_helper(JavaThread
                                       number_of_frames,
                                       frame_sizes,
                                       frame_pcs,
-                                      return_type);
+                                      return_type,
+                                      exec_mode);
   // On some platforms, we need a way to pass some platform dependent
   // information to the unpacking code so the skeletal frames come out
   // correct (initial fp value, unextended sp, ...)
@@ -1786,14 +1788,14 @@ Deoptimization::update_method_data_from_interpreter(MethodData* trap_mdo, int tr
                            ignore_maybe_prior_recompile);
 }
 
-Deoptimization::UnrollBlock* Deoptimization::uncommon_trap(JavaThread* thread, jint trap_request) {
+Deoptimization::UnrollBlock* Deoptimization::uncommon_trap(JavaThread* thread, jint trap_request, jint exec_mode) {
 
   // Still in Java no safepoints
   {
     // This enters VM and may safepoint
     uncommon_trap_inner(thread, trap_request);
   }
-  return fetch_unroll_info_helper(thread);
+  return fetch_unroll_info_helper(thread, exec_mode);
 }
 
 // Local derived constants.

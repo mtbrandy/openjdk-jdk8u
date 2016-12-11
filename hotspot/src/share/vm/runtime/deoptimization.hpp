@@ -162,7 +162,8 @@ class Deoptimization : AllStatic {
                 int  number_of_frames,
                 intptr_t* frame_sizes,
                 address* frames_pcs,
-                BasicType return_type);
+                BasicType return_type,
+                int unpack_kind);
     ~UnrollBlock();
 
     // Returns where a register is located.
@@ -204,7 +205,7 @@ class Deoptimization : AllStatic {
   // deoptimized frame.
   // @argument thread.     Thread where stub_frame resides.
   // @see OptoRuntime::deoptimization_fetch_unroll_info_C
-  static UnrollBlock* fetch_unroll_info(JavaThread* thread);
+  static UnrollBlock* fetch_unroll_info(JavaThread* thread, int exec_mode);
 
   //** Unpacks vframeArray onto execution stack
   // Called by assembly stub after execution has returned to
@@ -229,7 +230,7 @@ class Deoptimization : AllStatic {
 
   //** Performs an uncommon trap for compiled code.
   // The top most compiler frame is converted into interpreter frames
-  static UnrollBlock* uncommon_trap(JavaThread* thread, jint unloaded_class_index);
+  static UnrollBlock* uncommon_trap(JavaThread* thread, jint unloaded_class_index, jint exec_mode);
   // Helper routine that enters the VM and may block
   static void uncommon_trap_inner(JavaThread* thread, jint unloaded_class_index);
 
@@ -365,7 +366,7 @@ class Deoptimization : AllStatic {
   static void load_class_by_index(constantPoolHandle constant_pool, int index, TRAPS);
   static void load_class_by_index(constantPoolHandle constant_pool, int index);
 
-  static UnrollBlock* fetch_unroll_info_helper(JavaThread* thread);
+  static UnrollBlock* fetch_unroll_info_helper(JavaThread* thread, int exec_mode);
 
   static DeoptAction _unloaded_action; // == Action_reinterpret;
   static const char* _trap_reason_name[Reason_LIMIT];

@@ -1,6 +1,6 @@
 /*
- * Copyright (c) 2000, 2013, Oracle and/or its affiliates. All rights reserved.
- * Copyright 2012, 2013 SAP AG. All rights reserved.
+ * Copyright (c) 2005, 2015, Oracle and/or its affiliates. All rights reserved.
+ * Copyright 2012, 2015 SAP AG. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -24,29 +24,11 @@
  */
 
 #include "precompiled.hpp"
-#include "opto/compile.hpp"
-#include "opto/node.hpp"
-#include "runtime/globals.hpp"
-#include "utilities/debug.hpp"
+#include "c1/c1_Instruction.hpp"
+#include "c1/c1_LinearScan.hpp"
+#include "utilities/bitMap.inline.hpp"
 
-// processor dependent initialization for ppc
-
-void Compile::pd_compiler2_init() {
-
-  // Power7 and later
-  if (PowerArchitecturePPC64 > 6) {
-    if (FLAG_IS_DEFAULT(UsePopCountInstruction)) {
-      FLAG_SET_ERGO(bool, UsePopCountInstruction, true);
-    }
-  }
-
-  if (PowerArchitecturePPC64 == 6) {
-    if (FLAG_IS_DEFAULT(InsertEndGroupPPC64)) {
-      FLAG_SET_ERGO(bool, InsertEndGroupPPC64, true);
-    }
-  }
-
-  if (!VM_Version::has_isel() && FLAG_IS_DEFAULT(ConditionalMoveLimit)) {
-    FLAG_SET_ERGO(intx, ConditionalMoveLimit, 0);
-  }
+void LinearScan::allocate_fpu_stack() {
+  Unimplemented();
+  // No FPU stack on PPC
 }

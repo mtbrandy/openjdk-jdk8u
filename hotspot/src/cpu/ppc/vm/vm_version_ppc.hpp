@@ -44,6 +44,9 @@ protected:
     dcba,
     vcipher,
     vpmsumb,
+    lqarx,
+    tcheck,
+    mfdscr,
     num_features // last entry to count features
   };
   enum Feature_Flag_Set {
@@ -60,6 +63,9 @@ protected:
     dcba_m                = (1 << dcba   ),
     vcipher_m             = (1 << vcipher),
     vpmsumb_m             = (1 << vpmsumb),
+    lqarx_m               = (1 << lqarx  ),
+    tcheck_m              = (1 << tcheck ),
+    mfdscr_m              = (1 << mfdscr ),
     all_features_m        = -1
   };
   static int  _features;
@@ -92,6 +98,9 @@ public:
   static bool has_mtfprd()  { return has_vcipher(); } // alias for P8
   static bool has_mtfprwa() { return has_vcipher(); } // alias for P8
   static bool has_mffprd()  { return has_vcipher(); } // alias for P8
+  static bool has_lqarx()   { return (_features & lqarx_m) != 0; }
+  static bool has_tcheck()  { return (_features & tcheck_m) != 0; }
+  static bool has_mfdscr()  { return (_features & mfdscr_m) != 0; }
 
   static const char* cpu_features() { return _features_str; }
 
