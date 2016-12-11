@@ -100,6 +100,14 @@ inline void Assembler::adde(   Register d, Register a, Register b) { emit_int32(
 inline void Assembler::adde_(  Register d, Register a, Register b) { emit_int32(ADDE_OPCODE   | rt(d) | ra(a) | rb(b) | oe(0) | rc(1)); }
 inline void Assembler::subfe(  Register d, Register a, Register b) { emit_int32(SUBFE_OPCODE  | rt(d) | ra(a) | rb(b) | oe(0) | rc(0)); }
 inline void Assembler::subfe_( Register d, Register a, Register b) { emit_int32(SUBFE_OPCODE  | rt(d) | ra(a) | rb(b) | oe(0) | rc(1)); }
+inline void Assembler::addme(  Register d, Register a)             { emit_int32(ADDME_OPCODE  | rt(d) | ra(a) |         oe(0) | rc(0)); }
+inline void Assembler::addme_( Register d, Register a)             { emit_int32(ADDME_OPCODE  | rt(d) | ra(a) |         oe(0) | rc(1)); }
+inline void Assembler::subfme( Register d, Register a)             { emit_int32(SUBFME_OPCODE | rt(d) | ra(a) |         oe(0) | rc(0)); }
+inline void Assembler::subfme_(Register d, Register a)             { emit_int32(SUBFME_OPCODE | rt(d) | ra(a) |         oe(0) | rc(1)); }
+inline void Assembler::addze(  Register d, Register a)             { emit_int32(ADDZE_OPCODE  | rt(d) | ra(a) |         oe(0) | rc(0)); }
+inline void Assembler::addze_( Register d, Register a)             { emit_int32(ADDZE_OPCODE  | rt(d) | ra(a) |         oe(0) | rc(1)); }
+inline void Assembler::subfze( Register d, Register a)             { emit_int32(SUBFZE_OPCODE | rt(d) | ra(a) |         oe(0) | rc(0)); }
+inline void Assembler::subfze_(Register d, Register a)             { emit_int32(SUBFZE_OPCODE | rt(d) | ra(a) |         oe(0) | rc(1)); }
 inline void Assembler::neg(    Register d, Register a)             { emit_int32(NEG_OPCODE    | rt(d) | ra(a) | oe(0) | rc(0)); }
 inline void Assembler::neg_(   Register d, Register a)             { emit_int32(NEG_OPCODE    | rt(d) | ra(a) | oe(0) | rc(1)); }
 inline void Assembler::mulli(  Register d, Register a, int si16)   { emit_int32(MULLI_OPCODE  | rt(d) | ra(a) | simm(si16, 16)); }
@@ -117,6 +125,38 @@ inline void Assembler::divd(   Register d, Register a, Register b) { emit_int32(
 inline void Assembler::divd_(  Register d, Register a, Register b) { emit_int32(DIVD_OPCODE   | rt(d) | ra(a) | rb(b) | oe(0) | rc(1)); }
 inline void Assembler::divw(   Register d, Register a, Register b) { emit_int32(DIVW_OPCODE   | rt(d) | ra(a) | rb(b) | oe(0) | rc(0)); }
 inline void Assembler::divw_(  Register d, Register a, Register b) { emit_int32(DIVW_OPCODE   | rt(d) | ra(a) | rb(b) | oe(0) | rc(1)); }
+
+// Fixed-Point Arithmetic Instructions with Overflow detection
+inline void Assembler::addo(    Register d, Register a, Register b) { emit_int32(ADD_OPCODE    | rt(d) | ra(a) | rb(b) | oe(1) | rc(0)); }
+inline void Assembler::addo_(   Register d, Register a, Register b) { emit_int32(ADD_OPCODE    | rt(d) | ra(a) | rb(b) | oe(1) | rc(1)); }
+inline void Assembler::subfo(   Register d, Register a, Register b) { emit_int32(SUBF_OPCODE   | rt(d) | ra(a) | rb(b) | oe(1) | rc(0)); }
+inline void Assembler::subfo_(  Register d, Register a, Register b) { emit_int32(SUBF_OPCODE   | rt(d) | ra(a) | rb(b) | oe(1) | rc(1)); }
+inline void Assembler::addco(   Register d, Register a, Register b) { emit_int32(ADDC_OPCODE   | rt(d) | ra(a) | rb(b) | oe(1) | rc(0)); }
+inline void Assembler::addco_(  Register d, Register a, Register b) { emit_int32(ADDC_OPCODE   | rt(d) | ra(a) | rb(b) | oe(1) | rc(1)); }
+inline void Assembler::subfco(  Register d, Register a, Register b) { emit_int32(SUBFC_OPCODE  | rt(d) | ra(a) | rb(b) | oe(1) | rc(0)); }
+inline void Assembler::subfco_( Register d, Register a, Register b) { emit_int32(SUBFC_OPCODE  | rt(d) | ra(a) | rb(b) | oe(1) | rc(1)); }
+inline void Assembler::addeo(   Register d, Register a, Register b) { emit_int32(ADDE_OPCODE   | rt(d) | ra(a) | rb(b) | oe(1) | rc(0)); }
+inline void Assembler::addeo_(  Register d, Register a, Register b) { emit_int32(ADDE_OPCODE   | rt(d) | ra(a) | rb(b) | oe(1) | rc(1)); }
+inline void Assembler::subfeo(  Register d, Register a, Register b) { emit_int32(SUBFE_OPCODE  | rt(d) | ra(a) | rb(b) | oe(1) | rc(0)); }
+inline void Assembler::subfeo_( Register d, Register a, Register b) { emit_int32(SUBFE_OPCODE  | rt(d) | ra(a) | rb(b) | oe(1) | rc(1)); }
+inline void Assembler::addmeo(  Register d, Register a)             { emit_int32(ADDME_OPCODE  | rt(d) | ra(a) |         oe(1) | rc(0)); }
+inline void Assembler::addmeo_( Register d, Register a)             { emit_int32(ADDME_OPCODE  | rt(d) | ra(a) |         oe(1) | rc(1)); }
+inline void Assembler::subfmeo( Register d, Register a)             { emit_int32(SUBFME_OPCODE | rt(d) | ra(a) |         oe(1) | rc(0)); }
+inline void Assembler::subfmeo_(Register d, Register a)             { emit_int32(SUBFME_OPCODE | rt(d) | ra(a) |         oe(1) | rc(1)); }
+inline void Assembler::addzeo(  Register d, Register a)             { emit_int32(ADDZE_OPCODE  | rt(d) | ra(a) |         oe(1) | rc(0)); }
+inline void Assembler::addzeo_( Register d, Register a)             { emit_int32(ADDZE_OPCODE  | rt(d) | ra(a) |         oe(1) | rc(1)); }
+inline void Assembler::subfzeo( Register d, Register a)             { emit_int32(SUBFZE_OPCODE | rt(d) | ra(a) |         oe(1) | rc(0)); }
+inline void Assembler::subfzeo_(Register d, Register a)             { emit_int32(SUBFZE_OPCODE | rt(d) | ra(a) |         oe(1) | rc(1)); }
+inline void Assembler::nego(    Register d, Register a)             { emit_int32(NEG_OPCODE    | rt(d) | ra(a) | oe(1) | rc(0)); }
+inline void Assembler::nego_(   Register d, Register a)             { emit_int32(NEG_OPCODE    | rt(d) | ra(a) | oe(1) | rc(1)); }
+inline void Assembler::mulldo(  Register d, Register a, Register b) { emit_int32(MULLD_OPCODE  | rt(d) | ra(a) | rb(b) | oe(1) | rc(0)); }
+inline void Assembler::mulldo_( Register d, Register a, Register b) { emit_int32(MULLD_OPCODE  | rt(d) | ra(a) | rb(b) | oe(1) | rc(1)); }
+inline void Assembler::mullwo(  Register d, Register a, Register b) { emit_int32(MULLW_OPCODE  | rt(d) | ra(a) | rb(b) | oe(1) | rc(0)); }
+inline void Assembler::mullwo_( Register d, Register a, Register b) { emit_int32(MULLW_OPCODE  | rt(d) | ra(a) | rb(b) | oe(1) | rc(1)); }
+inline void Assembler::divdo(   Register d, Register a, Register b) { emit_int32(DIVD_OPCODE   | rt(d) | ra(a) | rb(b) | oe(1) | rc(0)); }
+inline void Assembler::divdo_(  Register d, Register a, Register b) { emit_int32(DIVD_OPCODE   | rt(d) | ra(a) | rb(b) | oe(1) | rc(1)); }
+inline void Assembler::divwo(   Register d, Register a, Register b) { emit_int32(DIVW_OPCODE   | rt(d) | ra(a) | rb(b) | oe(1) | rc(0)); }
+inline void Assembler::divwo_(  Register d, Register a, Register b) { emit_int32(DIVW_OPCODE   | rt(d) | ra(a) | rb(b) | oe(1) | rc(1)); }
 
 // extended mnemonics
 inline void Assembler::li(   Register d, int si16)             { Assembler::addi_r0ok( d, R0, si16); }
@@ -166,8 +206,11 @@ inline void Assembler::andc_(   Register a, Register s, Register b)    { emit_in
 inline void Assembler::orc(     Register a, Register s, Register b)    { emit_int32(ORC_OPCODE     | rta(a) | rs(s) | rb(b) | rc(0)); }
 inline void Assembler::orc_(    Register a, Register s, Register b)    { emit_int32(ORC_OPCODE     | rta(a) | rs(s) | rb(b) | rc(1)); }
 inline void Assembler::extsb(   Register a, Register s)                { emit_int32(EXTSB_OPCODE   | rta(a) | rs(s) | rc(0)); }
+inline void Assembler::extsb_(  Register a, Register s)                { emit_int32(EXTSB_OPCODE   | rta(a) | rs(s) | rc(1)); }
 inline void Assembler::extsh(   Register a, Register s)                { emit_int32(EXTSH_OPCODE   | rta(a) | rs(s) | rc(0)); }
+inline void Assembler::extsh_(  Register a, Register s)                { emit_int32(EXTSH_OPCODE   | rta(a) | rs(s) | rc(1)); }
 inline void Assembler::extsw(   Register a, Register s)                { emit_int32(EXTSW_OPCODE   | rta(a) | rs(s) | rc(0)); }
+inline void Assembler::extsw_(  Register a, Register s)                { emit_int32(EXTSW_OPCODE   | rta(a) | rs(s) | rc(1)); }
 
 // extended mnemonics
 inline void Assembler::nop()                              { Assembler::ori(R0, R0, 0); }
@@ -453,6 +496,48 @@ inline void Assembler::creqv( int d, int s1, int s2) { emit_int32(CREQV_OPCODE  
 inline void Assembler::crandc(int d, int s1, int s2) { emit_int32(CRANDC_OPCODE | bt(d) | ba(s1) | bb(s2)); }
 inline void Assembler::crorc( int d, int s1, int s2) { emit_int32(CRORC_OPCODE  | bt(d) | ba(s1) | bb(s2)); }
 
+// More convenient version.
+inline void Assembler::crand( ConditionRegister crdst, Condition cdst, ConditionRegister crsrc, Condition csrc) {
+  int dst_bit = condition_register_bit(crdst, cdst),
+      src_bit = condition_register_bit(crsrc, csrc);
+  crand(dst_bit, src_bit, dst_bit);
+}
+inline void Assembler::crnand(ConditionRegister crdst, Condition cdst, ConditionRegister crsrc, Condition csrc) {
+  int dst_bit = condition_register_bit(crdst, cdst),
+      src_bit = condition_register_bit(crsrc, csrc);
+  crnand(dst_bit, src_bit, dst_bit);
+}
+inline void Assembler::cror(  ConditionRegister crdst, Condition cdst, ConditionRegister crsrc, Condition csrc) {
+  int dst_bit = condition_register_bit(crdst, cdst),
+      src_bit = condition_register_bit(crsrc, csrc);
+  cror(dst_bit, src_bit, dst_bit);
+}
+inline void Assembler::crxor( ConditionRegister crdst, Condition cdst, ConditionRegister crsrc, Condition csrc) {
+  int dst_bit = condition_register_bit(crdst, cdst),
+      src_bit = condition_register_bit(crsrc, csrc);
+  crxor(dst_bit, src_bit, dst_bit);
+}
+inline void Assembler::crnor( ConditionRegister crdst, Condition cdst, ConditionRegister crsrc, Condition csrc) {
+  int dst_bit = condition_register_bit(crdst, cdst),
+      src_bit = condition_register_bit(crsrc, csrc);
+  crnor(dst_bit, src_bit, dst_bit);
+}
+inline void Assembler::creqv( ConditionRegister crdst, Condition cdst, ConditionRegister crsrc, Condition csrc) {
+  int dst_bit = condition_register_bit(crdst, cdst),
+      src_bit = condition_register_bit(crsrc, csrc);
+  creqv(dst_bit, src_bit, dst_bit);
+}
+inline void Assembler::crandc(ConditionRegister crdst, Condition cdst, ConditionRegister crsrc, Condition csrc) {
+  int dst_bit = condition_register_bit(crdst, cdst),
+      src_bit = condition_register_bit(crsrc, csrc);
+  crandc(dst_bit, src_bit, dst_bit);
+}
+inline void Assembler::crorc( ConditionRegister crdst, Condition cdst, ConditionRegister crsrc, Condition csrc) {
+  int dst_bit = condition_register_bit(crdst, cdst),
+      src_bit = condition_register_bit(crsrc, csrc);
+  crorc(dst_bit, src_bit, dst_bit);
+}
+
 // Conditional move (>= Power7)
 inline void Assembler::isel(Register d, ConditionRegister cr, Condition cc, bool inv, Register a, Register b) {
   if (b == noreg) {
@@ -498,15 +583,22 @@ inline void Assembler::eieio()     { emit_int32( EIEIO_OPCODE); }
 inline void Assembler::isync()     { emit_int32( ISYNC_OPCODE); }
 inline void Assembler::elemental_membar(int e) { assert(0 < e && e < 16, "invalid encoding"); emit_int32( SYNC_OPCODE | e1215(e)); }
 
+// Wait instructions for polling.
+inline void Assembler::wait()    { emit_int32( WAIT_OPCODE); }
+inline void Assembler::waitrsv() { emit_int32( WAIT_OPCODE | 1<<(31-10)); } // WC=0b01 >=Power7
+
 // atomics
 // Use ra0mem to disallow R0 as base.
 inline void Assembler::lwarx_unchecked(Register d, Register a, Register b, int eh1)           { emit_int32( LWARX_OPCODE | rt(d) | ra0mem(a) | rb(b) | eh(eh1)); }
 inline void Assembler::ldarx_unchecked(Register d, Register a, Register b, int eh1)           { emit_int32( LDARX_OPCODE | rt(d) | ra0mem(a) | rb(b) | eh(eh1)); }
+inline void Assembler::lqarx_unchecked(Register d, Register a, Register b, int eh1)           { emit_int32( LQARX_OPCODE | rt(d) | ra0mem(a) | rb(b) | eh(eh1)); }
 inline bool Assembler::lxarx_hint_exclusive_access()                                          { return VM_Version::has_lxarxeh(); }
 inline void Assembler::lwarx( Register d, Register a, Register b, bool hint_exclusive_access) { lwarx_unchecked(d, a, b, (hint_exclusive_access && lxarx_hint_exclusive_access() && UseExtendedLoadAndReserveInstructionsPPC64) ? 1 : 0); }
 inline void Assembler::ldarx( Register d, Register a, Register b, bool hint_exclusive_access) { ldarx_unchecked(d, a, b, (hint_exclusive_access && lxarx_hint_exclusive_access() && UseExtendedLoadAndReserveInstructionsPPC64) ? 1 : 0); }
+inline void Assembler::lqarx( Register d, Register a, Register b, bool hint_exclusive_access) { lqarx_unchecked(d, a, b, (hint_exclusive_access && lxarx_hint_exclusive_access() && UseExtendedLoadAndReserveInstructionsPPC64) ? 1 : 0); }
 inline void Assembler::stwcx_(Register s, Register a, Register b)                             { emit_int32( STWCX_OPCODE | rs(s) | ra0mem(a) | rb(b) | rc(1)); }
 inline void Assembler::stdcx_(Register s, Register a, Register b)                             { emit_int32( STDCX_OPCODE | rs(s) | ra0mem(a) | rb(b) | rc(1)); }
+inline void Assembler::stqcx_(Register s, Register a, Register b)                             { emit_int32( STQCX_OPCODE | rs(s) | ra0mem(a) | rb(b) | rc(1)); }
 
 // Instructions for adjusting thread priority
 // for simultaneous multithreading (SMT) on POWER5.
@@ -516,6 +608,12 @@ inline void Assembler::smt_prio_medium_low()  { Assembler::or_unchecked(R6,  R6,
 inline void Assembler::smt_prio_medium()      { Assembler::or_unchecked(R2,  R2,  R2); }
 inline void Assembler::smt_prio_medium_high() { Assembler::or_unchecked(R5,  R5,  R5); }
 inline void Assembler::smt_prio_high()        { Assembler::or_unchecked(R3,  R3,  R3); }
+// >= Power7
+inline void Assembler::smt_yield()            { Assembler::or_unchecked(R27, R27, R27); }
+inline void Assembler::smt_mdoio()            { Assembler::or_unchecked(R29, R29, R29); }
+inline void Assembler::smt_mdoom()            { Assembler::or_unchecked(R30, R30, R30); }
+// >= Power8
+inline void Assembler::smt_miso()             { Assembler::or_unchecked(R26, R26, R26); }
 
 inline void Assembler::twi_0(Register a)      { twi_unchecked(0, a, 0);}
 
@@ -779,7 +877,8 @@ inline void Assembler::tbegin_()                                { emit_int32( TB
 inline void Assembler::tbeginrot_()                             { emit_int32( TBEGIN_OPCODE | /*R=1*/ 1u << (31-10) | rc(1)); }
 inline void Assembler::tend_()                                  { emit_int32( TEND_OPCODE | rc(1)); }
 inline void Assembler::tendall_()                               { emit_int32( TEND_OPCODE | /*A=1*/ 1u << (31-6) | rc(1)); }
-inline void Assembler::tabort_(Register a)                      { emit_int32( TABORT_OPCODE | ra(a) | rc(1)); }
+inline void Assembler::tabort_()                                { emit_int32( TABORT_OPCODE | rc(1)); }
+inline void Assembler::tabort_(Register a)                      { assert(a != R0, "r0 not allowed"); emit_int32( TABORT_OPCODE | ra(a) | rc(1)); }
 inline void Assembler::tabortwc_(int t, Register a, Register b) { emit_int32( TABORTWC_OPCODE | to(t) | ra(a) | rb(b) | rc(1)); }
 inline void Assembler::tabortwci_(int t, Register a, int si)    { emit_int32( TABORTWCI_OPCODE | to(t) | ra(a) | sh1620(si) | rc(1)); }
 inline void Assembler::tabortdc_(int t, Register a, Register b) { emit_int32( TABORTDC_OPCODE | to(t) | ra(a) | rb(b) | rc(1)); }
@@ -827,10 +926,13 @@ inline void Assembler::dcbtstct(Register s2, int ct)  { emit_int32( DCBTST_OPCOD
 // ra0 version
 inline void Assembler::lwarx_unchecked(Register d, Register b, int eh1)          { emit_int32( LWARX_OPCODE | rt(d) | rb(b) | eh(eh1)); }
 inline void Assembler::ldarx_unchecked(Register d, Register b, int eh1)          { emit_int32( LDARX_OPCODE | rt(d) | rb(b) | eh(eh1)); }
+inline void Assembler::lqarx_unchecked(Register d, Register b, int eh1)          { emit_int32( LQARX_OPCODE | rt(d) | rb(b) | eh(eh1)); }
 inline void Assembler::lwarx( Register d, Register b, bool hint_exclusive_access){ lwarx_unchecked(d, b, (hint_exclusive_access && lxarx_hint_exclusive_access() && UseExtendedLoadAndReserveInstructionsPPC64) ? 1 : 0); }
 inline void Assembler::ldarx( Register d, Register b, bool hint_exclusive_access){ ldarx_unchecked(d, b, (hint_exclusive_access && lxarx_hint_exclusive_access() && UseExtendedLoadAndReserveInstructionsPPC64) ? 1 : 0); }
+inline void Assembler::lqarx( Register d, Register b, bool hint_exclusive_access){ lqarx_unchecked(d, b, (hint_exclusive_access && lxarx_hint_exclusive_access() && UseExtendedLoadAndReserveInstructionsPPC64) ? 1 : 0); }
 inline void Assembler::stwcx_(Register s, Register b)                            { emit_int32( STWCX_OPCODE | rs(s) | rb(b) | rc(1)); }
 inline void Assembler::stdcx_(Register s, Register b)                            { emit_int32( STDCX_OPCODE | rs(s) | rb(b) | rc(1)); }
+inline void Assembler::stqcx_(Register s, Register b)                            { emit_int32( STQCX_OPCODE | rs(s) | rb(b) | rc(1)); }
 
 // ra0 version
 inline void Assembler::lfs( FloatRegister d, int si16)   { emit_int32( LFS_OPCODE  | frt(d) | simm(si16,16)); }
@@ -871,12 +973,15 @@ inline void Assembler::load_const(Register d, Label& L, Register tmp) {
 
 // Load a 64 bit constant encoded by an AddressLiteral. patchable.
 inline void Assembler::load_const(Register d, AddressLiteral& a, Register tmp) {
-  assert(d != R0, "R0 not allowed");
   // First relocate (we don't change the offset in the RelocationHolder,
   // just pass a.rspec()), then delegate to load_const(Register, long).
   relocate(a.rspec());
   load_const(d, (long)a.value(), tmp);
 }
 
+inline void Assembler::load_const32(Register d, int i) {
+  lis(d, i >> 16);
+  ori(d, d, i & 0xFFFF);
+}
 
 #endif // CPU_PPC_VM_ASSEMBLER_PPC_INLINE_HPP

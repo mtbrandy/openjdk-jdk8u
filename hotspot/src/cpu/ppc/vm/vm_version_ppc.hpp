@@ -41,6 +41,9 @@ protected:
     popcntw,
     fcfids,
     vand,
+    lqarx,
+    tcheck,
+    mfdscr,
     dcba,
     vcipher,
     num_features // last entry to count features
@@ -57,7 +60,10 @@ protected:
     fcfids_m              = (1 << fcfids ),
     vand_m                = (1 << vand   ),
     dcba_m                = (1 << dcba   ),
+    lqarx_m               = (1 << lqarx  ),
     vcipher_m             = (1 << vcipher),
+    tcheck_m              = (1 << tcheck ),
+    mfdscr_m              = (1 << mfdscr ),
     all_features_m        = -1
   };
   static int  _features;
@@ -85,7 +91,10 @@ public:
   static bool has_fcfids()  { return (_features & fcfids_m) != 0; }
   static bool has_vand()    { return (_features & vand_m) != 0; }
   static bool has_dcba()    { return (_features & dcba_m) != 0; }
+  static bool has_lqarx()   { return (_features & lqarx_m) != 0; }
   static bool has_vcipher() { return (_features & vcipher_m) != 0; }
+  static bool has_tcheck()  { return (_features & tcheck_m) != 0; }
+  static bool has_mfdscr()  { return (_features & mfdscr_m) != 0; }
 
   static const char* cpu_features() { return _features_str; }
 

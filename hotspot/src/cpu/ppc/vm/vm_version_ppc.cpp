@@ -60,7 +60,9 @@ void VM_Version::initialize() {
 
   // If PowerArchitecturePPC64 hasn't been specified explicitly determine from features.
   if (FLAG_IS_DEFAULT(PowerArchitecturePPC64)) {
-    if (VM_Version::has_popcntw()) {
+    if (VM_Version::has_tcheck() && VM_Version::has_lqarx()) {
+       FLAG_SET_ERGO(uintx, PowerArchitecturePPC64, 8);
+    } else if (VM_Version::has_popcntw()) {
       FLAG_SET_ERGO(uintx, PowerArchitecturePPC64, 7);
     } else if (VM_Version::has_cmpb()) {
       FLAG_SET_ERGO(uintx, PowerArchitecturePPC64, 6);
@@ -70,9 +72,19 @@ void VM_Version::initialize() {
       FLAG_SET_ERGO(uintx, PowerArchitecturePPC64, 0);
     }
   }
-  guarantee(PowerArchitecturePPC64 == 0 || PowerArchitecturePPC64 == 5 ||
-            PowerArchitecturePPC64 == 6 || PowerArchitecturePPC64 == 7,
-            "PowerArchitecturePPC64 should be 0, 5, 6 or 7");
+
+  bool PowerArchitecturePPC64_ok = false;
+  switch (PowerArchitecturePPC64) {
+    case 8: if (!VM_Version::has_tcheck() ) break;
+            if (!VM_Version::has_lqarx()  ) break;
+    case 7: if (!VM_Version::has_popcntw()) break;
+    case 6: if (!VM_Version::has_cmpb()   ) break;
+    case 5: if (!VM_Version::has_popcntb()) break;
+    case 0: PowerArchitecturePPC64_ok = true; break;
+    default: break;
+  }
+
+  guarantee(PowerArchitecturePPC64_ok, "PowerArchitecturePPC64 cannot be set to " UINTX_FORMAT " on this machine");
 
   if (!UseSIGTRAP) {
     MSG(TrapBasedICMissChecks);
@@ -122,6 +134,12 @@ void VM_Version::initialize() {
   // Atomic::cmpxchg and StubGenerator::generate_atomic_cmpxchg_ptr)
   // and 'atomic long memory ops' (see Unsafe_GetLongVolatile).
   _supports_cx8 = true;
+
+  // Used by C1.
+  _supports_atomic_getset4 = true;
+  _supports_atomic_getadd4 = true;
+  _supports_atomic_getset8 = true;
+  _supports_atomic_getadd8 = true;
 
   UseSSE = 0; // Only on x86 and x64
 

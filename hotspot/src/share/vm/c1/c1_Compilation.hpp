@@ -194,7 +194,7 @@ class Compilation: public StackObj {
     return (int) NMethodSizeLimit;  // default 256K or 512K
 #else
     // conditional branches on PPC are restricted to 16 bit signed
-    return MIN2((unsigned int)NMethodSizeLimit,32*K);
+    return MIN2((unsigned int)NMethodSizeLimit,(unsigned int)(32*K));
 #endif
   }
   static int desired_max_constant_size() {

@@ -35,6 +35,36 @@
 // on PPC with its simple addressing mode. Use RegisterOrConstant to
 // represent an offset.
 class Address VALUE_OBJ_CLASS_SPEC {
+ private:
+  Register _base;         // Base register.
+  Register _index;        // Index register.
+  intptr_t _disp;         // Displacement.
+
+ public:
+  Address(Register b, Register i, address d = 0)
+    : _base(b), _index(i), _disp((intptr_t)d) {
+    assert(i == noreg || d == 0, "can't have both");
+  }
+
+  Address(Register b, address d = 0)
+    : _base(b), _index(noreg), _disp((intptr_t)d) {}
+
+  Address(Register b, intptr_t d)
+    : _base(b), _index(noreg), _disp(d) {}
+
+  Address(Register b, RegisterOrConstant roc)
+    : _base(b), _index(noreg), _disp(0) {
+    if (roc.is_constant()) _disp = roc.as_constant(); else _index = roc.as_register();
+  }
+
+  Address()
+    : _base(noreg), _index(noreg), _disp(0) {}
+
+  // accessors
+  Register base()  const { return _base; }
+  Register index() const { return _index; }
+  int      disp()  const { return (int)_disp; }
+  bool     is_const() const { return _base == noreg && _index == noreg; }
 };
 
 class AddressLiteral VALUE_OBJ_CLASS_SPEC {
@@ -164,6 +194,11 @@ struct FunctionDescriptor VALUE_OBJ_CLASS_SPEC {
 };
 #endif
 
+
+// The PPC Assembler: Pure assembler doing NO optimizations on the
+// instruction level; i.e., what you write is what you get. The
+// Assembler is generating code into a CodeBuffer.
+
 class Assembler : public AbstractAssembler {
  protected:
   // Displacement routines
@@ -224,10 +259,13 @@ class Assembler : public AbstractAssembler {
     ADDIS_OPCODE  = (15u << OPCODE_SHIFT),
     ADDIC__OPCODE = (13u << OPCODE_SHIFT),
     ADDE_OPCODE   = (31u << OPCODE_SHIFT | 138u << 1),
+    ADDME_OPCODE  = (31u << OPCODE_SHIFT | 234u << 1),
+    ADDZE_OPCODE  = (31u << OPCODE_SHIFT | 202u << 1),
     SUBF_OPCODE   = (31u << OPCODE_SHIFT |  40u << 1),
     SUBFC_OPCODE  = (31u << OPCODE_SHIFT |   8u << 1),
     SUBFE_OPCODE  = (31u << OPCODE_SHIFT | 136u << 1),
     SUBFIC_OPCODE = (8u  << OPCODE_SHIFT),
+    SUBFME_OPCODE = (31u << OPCODE_SHIFT | 232u << 1),
     SUBFZE_OPCODE = (31u << OPCODE_SHIFT | 200u << 1),
     DIVW_OPCODE   = (31u << OPCODE_SHIFT | 491u << 1),
     MULLW_OPCODE  = (31u << OPCODE_SHIFT | 235u << 1),
@@ -284,19 +322,20 @@ class Assembler : public AbstractAssembler {
     MTCTR_OPCODE  = (MTSPR_OPCODE | 9 << SPR_0_4_SHIFT),
     MFCTR_OPCODE  = (MFSPR_OPCODE | 9 << SPR_0_4_SHIFT),
 
-    MTTFHAR_OPCODE   = (MTSPR_OPCODE | 128 << SPR_0_4_SHIFT),
-    MFTFHAR_OPCODE   = (MFSPR_OPCODE | 128 << SPR_0_4_SHIFT),
-    MTTFIAR_OPCODE   = (MTSPR_OPCODE | 129 << SPR_0_4_SHIFT),
-    MFTFIAR_OPCODE   = (MFSPR_OPCODE | 129 << SPR_0_4_SHIFT),
-    MTTEXASR_OPCODE  = (MTSPR_OPCODE | 130 << SPR_0_4_SHIFT),
-    MFTEXASR_OPCODE  = (MFSPR_OPCODE | 130 << SPR_0_4_SHIFT),
-    MTTEXASRU_OPCODE = (MTSPR_OPCODE | 131 << SPR_0_4_SHIFT),
-    MFTEXASRU_OPCODE = (MFSPR_OPCODE | 131 << SPR_0_4_SHIFT),
+    // Attention: Higher and lower half are inserted in reversed order.
+    MTTFHAR_OPCODE   = (MTSPR_OPCODE | 4 << SPR_5_9_SHIFT | 0 << SPR_0_4_SHIFT),
+    MFTFHAR_OPCODE   = (MFSPR_OPCODE | 4 << SPR_5_9_SHIFT | 0 << SPR_0_4_SHIFT),
+    MTTFIAR_OPCODE   = (MTSPR_OPCODE | 4 << SPR_5_9_SHIFT | 1 << SPR_0_4_SHIFT),
+    MFTFIAR_OPCODE   = (MFSPR_OPCODE | 4 << SPR_5_9_SHIFT | 1 << SPR_0_4_SHIFT),
+    MTTEXASR_OPCODE  = (MTSPR_OPCODE | 4 << SPR_5_9_SHIFT | 2 << SPR_0_4_SHIFT),
+    MFTEXASR_OPCODE  = (MFSPR_OPCODE | 4 << SPR_5_9_SHIFT | 2 << SPR_0_4_SHIFT),
+    MTTEXASRU_OPCODE = (MTSPR_OPCODE | 4 << SPR_5_9_SHIFT | 3 << SPR_0_4_SHIFT),
+    MFTEXASRU_OPCODE = (MFSPR_OPCODE | 4 << SPR_5_9_SHIFT | 3 << SPR_0_4_SHIFT),
 
-    MTVRSAVE_OPCODE  = (MTSPR_OPCODE | 256 << SPR_0_4_SHIFT),
-    MFVRSAVE_OPCODE  = (MFSPR_OPCODE | 256 << SPR_0_4_SHIFT),
+    MTVRSAVE_OPCODE  = (MTSPR_OPCODE | 8 << SPR_5_9_SHIFT | 0 << SPR_0_4_SHIFT),
+    MFVRSAVE_OPCODE  = (MFSPR_OPCODE | 8 << SPR_5_9_SHIFT | 0 << SPR_0_4_SHIFT),
 
-    MFTB_OPCODE   = (MFSPR_OPCODE | 268 << SPR_0_4_SHIFT),
+    MFTB_OPCODE   = (MFSPR_OPCODE | 8 << SPR_5_9_SHIFT | 12 << SPR_0_4_SHIFT),
 
     MTCRF_OPCODE  = (31u << OPCODE_SHIFT | 144u << 1),
     MFCR_OPCODE   = (31u << OPCODE_SHIFT | 19u << 1),
@@ -657,6 +696,9 @@ class Assembler : public AbstractAssembler {
     SYNC_OPCODE    = (31u << OPCODE_SHIFT |  598u << 1),
     EIEIO_OPCODE   = (31u << OPCODE_SHIFT |  854u << 1),
 
+    // Wait instructions for polling.
+    WAIT_OPCODE    = (31u << OPCODE_SHIFT |   62u << 1),
+
     // Trap instructions
     TDI_OPCODE     = (2u  << OPCODE_SHIFT),
     TWI_OPCODE     = (3u  << OPCODE_SHIFT),
@@ -666,8 +708,10 @@ class Assembler : public AbstractAssembler {
     // Atomics.
     LWARX_OPCODE   = (31u << OPCODE_SHIFT |   20u << 1),
     LDARX_OPCODE   = (31u << OPCODE_SHIFT |   84u << 1),
+    LQARX_OPCODE   = (31u << OPCODE_SHIFT |  276u << 1),
     STWCX_OPCODE   = (31u << OPCODE_SHIFT |  150u << 1),
-    STDCX_OPCODE   = (31u << OPCODE_SHIFT |  214u << 1)
+    STDCX_OPCODE   = (31u << OPCODE_SHIFT |  214u << 1),
+    STQCX_OPCODE   = (31u << OPCODE_SHIFT |  182u << 1)
 
   };
 
@@ -831,11 +875,8 @@ class Assembler : public AbstractAssembler {
 
   enum Predict { pt = 1, pn = 0 }; // pt = predict taken
 
-  // instruction must start at passed address
+  // Instruction must start at passed address.
   static int instr_len(unsigned char *instr) { return BytesPerInstWord; }
-
-  // instruction must be left-justified in argument
-  static int instr_len(unsigned long instr)  { return BytesPerInstWord; }
 
   // longest instructions
   static int instr_maxlen() { return BytesPerInstWord; }
@@ -843,29 +884,29 @@ class Assembler : public AbstractAssembler {
   // Test if x is within signed immediate range for nbits.
   static bool is_simm(int x, unsigned int nbits) {
     assert(0 < nbits && nbits < 32, "out of bounds");
-    const int   min      = -( ((int)1) << nbits-1 );
-    const int   maxplus1 =  ( ((int)1) << nbits-1 );
+    const int   min      = -(((int)1) << nbits-1);
+    const int   maxplus1 =  (((int)1) << nbits-1);
     return min <= x && x < maxplus1;
   }
 
   static bool is_simm(jlong x, unsigned int nbits) {
     assert(0 < nbits && nbits < 64, "out of bounds");
-    const jlong min      = -( ((jlong)1) << nbits-1 );
-    const jlong maxplus1 =  ( ((jlong)1) << nbits-1 );
+    const jlong min      = -(((jlong)1) << nbits-1);
+    const jlong maxplus1 =  (((jlong)1) << nbits-1);
     return min <= x && x < maxplus1;
   }
 
-  // Test if x is within unsigned immediate range for nbits
+  // Test if x is within unsigned immediate range for nbits.
   static bool is_uimm(int x, unsigned int nbits) {
     assert(0 < nbits && nbits < 32, "out of bounds");
-    const int   maxplus1 = ( ((int)1) << nbits );
-    return 0 <= x && x < maxplus1;
+    const unsigned int maxplus1 = (((unsigned int)1) << nbits);
+    return (unsigned int)x < maxplus1;
   }
 
   static bool is_uimm(jlong x, unsigned int nbits) {
     assert(0 < nbits && nbits < 64, "out of bounds");
-    const jlong maxplus1 =  ( ((jlong)1) << nbits );
-    return 0 <= x && x < maxplus1;
+    const julong maxplus1 = (((julong)1) << nbits);
+    return (julong)x < maxplus1;
   }
 
  protected:
@@ -1171,6 +1212,14 @@ class Assembler : public AbstractAssembler {
   inline void adde_(  Register d, Register a, Register b);
   inline void subfe(  Register d, Register a, Register b);
   inline void subfe_( Register d, Register a, Register b);
+  inline void addme(  Register d, Register a);
+  inline void addme_( Register d, Register a);
+  inline void subfme( Register d, Register a);
+  inline void subfme_(Register d, Register a);
+  inline void addze(  Register d, Register a);
+  inline void addze_( Register d, Register a);
+  inline void subfze( Register d, Register a);
+  inline void subfze_(Register d, Register a);
   inline void neg(    Register d, Register a);
   inline void neg_(   Register d, Register a);
   inline void mulli(  Register d, Register a, int si16);
@@ -1188,6 +1237,38 @@ class Assembler : public AbstractAssembler {
   inline void divd_(  Register d, Register a, Register b);
   inline void divw(   Register d, Register a, Register b);
   inline void divw_(  Register d, Register a, Register b);
+
+  // Fixed-Point Arithmetic Instructions with Overflow detection
+  inline void addo(    Register d, Register a, Register b);
+  inline void addo_(   Register d, Register a, Register b);
+  inline void subfo(   Register d, Register a, Register b);
+  inline void subfo_(  Register d, Register a, Register b);
+  inline void addco(   Register d, Register a, Register b);
+  inline void addco_(  Register d, Register a, Register b);
+  inline void subfco(  Register d, Register a, Register b);
+  inline void subfco_( Register d, Register a, Register b);
+  inline void addeo(   Register d, Register a, Register b);
+  inline void addeo_(  Register d, Register a, Register b);
+  inline void subfeo(  Register d, Register a, Register b);
+  inline void subfeo_( Register d, Register a, Register b);
+  inline void addmeo(  Register d, Register a);
+  inline void addmeo_( Register d, Register a);
+  inline void subfmeo( Register d, Register a);
+  inline void subfmeo_(Register d, Register a);
+  inline void addzeo(  Register d, Register a);
+  inline void addzeo_( Register d, Register a);
+  inline void subfzeo( Register d, Register a);
+  inline void subfzeo_(Register d, Register a);
+  inline void nego(    Register d, Register a);
+  inline void nego_(   Register d, Register a);
+  inline void mulldo(  Register d, Register a, Register b);
+  inline void mulldo_( Register d, Register a, Register b);
+  inline void mullwo(  Register d, Register a, Register b);
+  inline void mullwo_( Register d, Register a, Register b);
+  inline void divdo(   Register d, Register a, Register b);
+  inline void divdo_(  Register d, Register a, Register b);
+  inline void divwo(   Register d, Register a, Register b);
+  inline void divwo_(  Register d, Register a, Register b);
 
   // extended mnemonics
   inline void li(   Register d, int si16);
@@ -1303,7 +1384,7 @@ class Assembler : public AbstractAssembler {
   inline void isel_0( Register d, ConditionRegister cr, Condition cc, Register b = noreg);
 
   // PPC 1, section 3.3.11, Fixed-Point Logical Instructions
-         void andi(   Register a, Register s, int ui16);   // optimized version
+         void andi(   Register a, Register s, long ui16);   // optimized version
   inline void andi_(  Register a, Register s, int ui16);
   inline void andis_( Register a, Register s, int ui16);
   inline void ori(    Register a, Register s, int ui16);
@@ -1328,8 +1409,11 @@ class Assembler : public AbstractAssembler {
   inline void orc(    Register a, Register s, Register b);
   inline void orc_(   Register a, Register s, Register b);
   inline void extsb(  Register a, Register s);
+  inline void extsb_( Register a, Register s);
   inline void extsh(  Register a, Register s);
+  inline void extsh_( Register a, Register s);
   inline void extsw(  Register a, Register s);
+  inline void extsw_( Register a, Register s);
 
   // extended mnemonics
   inline void nop();
@@ -1495,6 +1579,26 @@ class Assembler : public AbstractAssembler {
   inline void mftexasr(Register d);
   inline void mftexasru(Register d);
 
+  // TEXASR bit description
+  enum transaction_failure_reason {
+    // Upper half (TEXASRU):
+    tm_failure_persistent =  7, // The failure is likely to recur on each execution.
+    tm_disallowed         =  8, // The instruction is not permitted.
+    tm_nesting_of         =  9, // The maximum transaction level was exceeded.
+    tm_footprint_of       = 10, // The tracking limit for transactional storage accesses was exceeded.
+    tm_self_induced_cf    = 11, // A self-induced conflict occurred in Suspended state.
+    tm_non_trans_cf       = 12, // A conflict occurred with a non-transactional access by another processor.
+    tm_trans_cf           = 13, // A conflict occurred with another transaction.
+    tm_translation_cf     = 14, // A conflict occurred with a TLB invalidation.
+    tm_inst_fetch_cf      = 16, // An instruction fetch was performed from a block that was previously written transactionally.
+    tm_tabort             = 31, // Termination was caused by the execution of an abort instruction.
+    // Lower half:
+    tm_suspended          = 32, // Failure was recorded in Suspended state.
+    tm_failure_summary    = 36, // Failure has been detected and recorded.
+    tm_tfiar_exact        = 37, // Value in the TFIAR is exact.
+    tm_rot                = 38, // Rollback-only transaction.
+  };
+
   // PPC 1, section 2.4.1 Branch Instructions
   inline void b(  address a, relocInfo::relocType rt = relocInfo::none);
   inline void b(  Label& L);
@@ -1582,6 +1686,7 @@ class Assembler : public AbstractAssembler {
   inline void bnectrl(ConditionRegister crx, relocInfo::relocType rt = relocInfo::none);
 
   // condition register logic instructions
+  // NOTE: There's a preferred form: d and s2 should point into the same condition register.
   inline void crand( int d, int s1, int s2);
   inline void crnand(int d, int s1, int s2);
   inline void cror(  int d, int s1, int s2);
@@ -1590,6 +1695,19 @@ class Assembler : public AbstractAssembler {
   inline void creqv( int d, int s1, int s2);
   inline void crandc(int d, int s1, int s2);
   inline void crorc( int d, int s1, int s2);
+
+  // More convenient version.
+  int condition_register_bit(ConditionRegister cr, Condition c) {
+    return 4 * (int)(intptr_t)cr + c;
+  }
+  void crand( ConditionRegister crdst, Condition cdst, ConditionRegister crsrc, Condition csrc);
+  void crnand(ConditionRegister crdst, Condition cdst, ConditionRegister crsrc, Condition csrc);
+  void cror(  ConditionRegister crdst, Condition cdst, ConditionRegister crsrc, Condition csrc);
+  void crxor( ConditionRegister crdst, Condition cdst, ConditionRegister crsrc, Condition csrc);
+  void crnor( ConditionRegister crdst, Condition cdst, ConditionRegister crsrc, Condition csrc);
+  void creqv( ConditionRegister crdst, Condition cdst, ConditionRegister crsrc, Condition csrc);
+  void crandc(ConditionRegister crdst, Condition cdst, ConditionRegister crsrc, Condition csrc);
+  void crorc( ConditionRegister crdst, Condition cdst, ConditionRegister crsrc, Condition csrc);
 
   // icache and dcache related instructions
   inline void icbi(  Register s1, Register s2);
@@ -1654,14 +1772,21 @@ class Assembler : public AbstractAssembler {
   inline void isync();
   inline void elemental_membar(int e); // Elemental Memory Barriers (>=Power 8)
 
+  // Wait instructions for polling. Attention: May result in SIGILL.
+  inline void wait();
+  inline void waitrsv(); // >=Power7
+
   // atomics
   inline void lwarx_unchecked(Register d, Register a, Register b, int eh1 = 0);
   inline void ldarx_unchecked(Register d, Register a, Register b, int eh1 = 0);
+  inline void lqarx_unchecked(Register d, Register a, Register b, int eh1 = 0);
   inline bool lxarx_hint_exclusive_access();
   inline void lwarx(  Register d, Register a, Register b, bool hint_exclusive_access = false);
   inline void ldarx(  Register d, Register a, Register b, bool hint_exclusive_access = false);
+  inline void lqarx(  Register d, Register a, Register b, bool hint_exclusive_access = false);
   inline void stwcx_( Register s, Register a, Register b);
   inline void stdcx_( Register s, Register a, Register b);
+  inline void stqcx_( Register s, Register a, Register b);
 
   // Instructions for adjusting thread priority for simultaneous
   // multithreading (SMT) on Power5.
@@ -1674,6 +1799,12 @@ class Assembler : public AbstractAssembler {
   inline void smt_prio_low();
   inline void smt_prio_medium_low();
   inline void smt_prio_medium();
+  // >= Power7
+  inline void smt_yield();
+  inline void smt_mdoio();
+  inline void smt_mdoom();
+  // >= Power8
+  inline void smt_miso();
 
   // trap instructions
   inline void twi_0(Register a); // for load with acquire semantics use load+twi_0+isync (trap can't occur)
@@ -1960,6 +2091,7 @@ class Assembler : public AbstractAssembler {
   inline void tbeginrot_(); // R=1 Rollback-Only Transaction
   inline void tend_();    // A=0
   inline void tendall_(); // A=1
+  inline void tabort_();
   inline void tabort_(Register a);
   inline void tabortwc_(int t, Register a, Register b);
   inline void tabortwci_(int t, Register a, int si);
@@ -1968,6 +2100,10 @@ class Assembler : public AbstractAssembler {
   inline void tsuspend_(); // tsr with L=0
   inline void tresume_();  // tsr with L=1
   inline void tcheck(int f);
+
+  static bool is_tbegin(int x) {
+    return TBEGIN_OPCODE == (x & (0x3f << OPCODE_SHIFT | 0x3ff << 1));
+  }
 
   // The following encoders use r0 as second operand. These instructions
   // read r0 as '0'.
@@ -2012,10 +2148,13 @@ class Assembler : public AbstractAssembler {
   // Atomics: use ra0mem to disallow R0 as base.
   inline void lwarx_unchecked(Register d, Register b, int eh1);
   inline void ldarx_unchecked(Register d, Register b, int eh1);
+  inline void lqarx_unchecked(Register d, Register b, int eh1);
   inline void lwarx( Register d, Register b, bool hint_exclusive_access);
   inline void ldarx( Register d, Register b, bool hint_exclusive_access);
+  inline void lqarx( Register d, Register b, bool hint_exclusive_access);
   inline void stwcx_(Register s, Register b);
   inline void stdcx_(Register s, Register b);
+  inline void stqcx_(Register s, Register b);
   inline void lfs(   FloatRegister d, int si16);
   inline void lfsx(  FloatRegister d, Register b);
   inline void lfd(   FloatRegister d, int si16);
@@ -2068,6 +2207,7 @@ class Assembler : public AbstractAssembler {
   inline void load_const(Register d, void* a,           Register tmp = noreg);
   inline void load_const(Register d, Label& L,          Register tmp = noreg);
   inline void load_const(Register d, AddressLiteral& a, Register tmp = noreg);
+  inline void load_const32(Register d, int i); // load signed int (patchable)
 
   // Load a 64 bit constant, optimized, not identifyable.
   // Tmp can be used to increase ILP. Set return_simm16_rest = true to get a
@@ -2076,6 +2216,20 @@ class Assembler : public AbstractAssembler {
          int load_const_optimized(Register d, long a,  Register tmp = noreg, bool return_simm16_rest = false);
   inline int load_const_optimized(Register d, void* a, Register tmp = noreg, bool return_simm16_rest = false) {
     return load_const_optimized(d, (long)(unsigned long)a, tmp, return_simm16_rest);
+  }
+
+  // If return_simm16_rest, the return value needs to get added afterwards.
+         int add_const_optimized(Register d, Register s, long x, Register tmp = R0, bool return_simm16_rest = false);
+  inline int add_const_optimized(Register d, Register s, void* a, Register tmp = R0, bool return_simm16_rest = false) {
+    return add_const_optimized(d, s, (long)(unsigned long)a, tmp, return_simm16_rest);
+  }
+
+  // If return_simm16_rest, the return value needs to get added afterwards.
+  inline int sub_const_optimized(Register d, Register s, long x, Register tmp = R0, bool return_simm16_rest = false) {
+    return add_const_optimized(d, s, -x, tmp, return_simm16_rest);
+  }
+  inline int sub_const_optimized(Register d, Register s, void* a, Register tmp = R0, bool return_simm16_rest = false) {
+    return sub_const_optimized(d, s, (long)(unsigned long)a, tmp, return_simm16_rest);
   }
 
   // Creation

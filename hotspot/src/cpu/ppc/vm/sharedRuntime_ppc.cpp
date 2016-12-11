@@ -60,7 +60,7 @@ class RegisterSaver {
   // Support different return pc locations.
   enum ReturnPCLocation {
     return_pc_is_lr,
-    return_pc_is_r4,
+    return_pc_is_pre_saved,
     return_pc_is_thread_saved_exception_pc
   };
 
@@ -193,8 +193,8 @@ static const RegisterSaver::LiveRegType RegisterSaver_LiveRegs[] = {
   RegisterSaver_LiveIntReg(   R27 ),
   RegisterSaver_LiveIntReg(   R28 ),
   RegisterSaver_LiveIntReg(   R29 ),
-  RegisterSaver_LiveIntReg(   R31 ),
-  RegisterSaver_LiveIntReg(   R30 ), // r30 must be the last register
+  RegisterSaver_LiveIntReg(   R30 ),  
+  RegisterSaver_LiveIntReg(   R31 ), // must be the last register
 };
 
 OopMap* RegisterSaver::push_frame_reg_args_and_save_live_registers(MacroAssembler* masm,
@@ -228,29 +228,31 @@ OopMap* RegisterSaver::push_frame_reg_args_and_save_live_registers(MacroAssemble
 
   BLOCK_COMMENT("push_frame_reg_args_and_save_live_registers {");
 
-  // Save r30 in the last slot of the not yet pushed frame so that we
+  // Save r31 in the last slot of the not yet pushed frame so that we
   // can use it as scratch reg.
-  __ std(R30, -reg_size, R1_SP);
+  __ std(R31, -reg_size, R1_SP);
   assert(-reg_size == register_save_offset - frame_size_in_bytes + ((regstosave_num-1)*reg_size),
          "consistency check");
 
   // save the flags
   // Do the save_LR_CR by hand and adjust the return pc if requested.
-  __ mfcr(R30);
-  __ std(R30, _abi(cr), R1_SP);
+  __ mfcr(R31);
+  __ std(R31, _abi(cr), R1_SP);
   switch (return_pc_location) {
-    case return_pc_is_lr:    __ mflr(R30);           break;
-    case return_pc_is_r4:    __ mr(R30, R4);     break;
-    case return_pc_is_thread_saved_exception_pc:
-                                 __ ld(R30, thread_(saved_exception_pc)); break;
+    case return_pc_is_lr: __ mflr(R31); break;
+    case return_pc_is_pre_saved: assert(return_pc_adjustment == 0, "unsupported"); break;
+    case return_pc_is_thread_saved_exception_pc: __ ld(R31, thread_(saved_exception_pc)); break;
     default: ShouldNotReachHere();
   }
-  if (return_pc_adjustment != 0)
-    __ addi(R30, R30, return_pc_adjustment);
-  __ std(R30, _abi(lr), R1_SP);
+  if (return_pc_location != return_pc_is_pre_saved) {
+    if (return_pc_adjustment != 0) {
+      __ addi(R31, R31, return_pc_adjustment);
+    }
+    __ std(R31, _abi(lr), R1_SP);
+  }
 
   // push a new frame
-  __ push_frame(frame_size_in_bytes, R30);
+  __ push_frame(frame_size_in_bytes, R31);
 
   // save all registers (ints and floats)
   offset = register_save_offset;
@@ -260,7 +262,7 @@ OopMap* RegisterSaver::push_frame_reg_args_and_save_live_registers(MacroAssemble
 
     switch (reg_type) {
       case RegisterSaver::int_reg: {
-        if (reg_num != 30) { // We spilled R30 right at the beginning.
+        if (reg_num != 31) { // We spilled R31 right at the beginning.
           __ std(as_Register(reg_num), offset, R1_SP);
         }
         break;
@@ -271,8 +273,8 @@ OopMap* RegisterSaver::push_frame_reg_args_and_save_live_registers(MacroAssemble
       }
       case RegisterSaver::special_reg: {
         if (reg_num == SR_CTR_SpecialRegisterEnumValue) {
-          __ mfctr(R30);
-          __ std(R30, offset, R1_SP);
+          __ mfctr(R31);
+          __ std(R31, offset, R1_SP);
         } else {
           Unimplemented();
         }
@@ -320,7 +322,7 @@ void RegisterSaver::restore_live_registers_and_pop_frame(MacroAssembler* masm,
 
     switch (reg_type) {
       case RegisterSaver::int_reg: {
-        if (reg_num != 30) // R30 restored at the end, it's the tmp reg!
+        if (reg_num != 31) // R31 restored at the end, it's the tmp reg!
           __ ld(as_Register(reg_num), offset, R1_SP);
         break;
       }
@@ -331,8 +333,8 @@ void RegisterSaver::restore_live_registers_and_pop_frame(MacroAssembler* masm,
       case RegisterSaver::special_reg: {
         if (reg_num == SR_CTR_SpecialRegisterEnumValue) {
           if (restore_ctr) { // Nothing to do here if ctr already contains the next address.
-            __ ld(R30, offset, R1_SP);
-            __ mtctr(R30);
+            __ ld(R31, offset, R1_SP);
+            __ mtctr(R31);
           }
         } else {
           Unimplemented();
@@ -349,10 +351,10 @@ void RegisterSaver::restore_live_registers_and_pop_frame(MacroAssembler* masm,
   __ pop_frame();
 
   // restore the flags
-  __ restore_LR_CR(R30);
+  __ restore_LR_CR(R31);
 
   // restore scratch register's value
-  __ ld(R30, -reg_size, R1_SP);
+  __ ld(R31, -reg_size, R1_SP);
 
   BLOCK_COMMENT("} restore_live_registers_and_pop_frame");
 }
@@ -644,7 +646,7 @@ int SharedRuntime::java_calling_convention(const BasicType *sig_bt,
   return round_to(stk, 2);
 }
 
-#ifdef COMPILER2
+#if defined(COMPILER1) || defined(COMPILER2)
 // Calling convention for calling C code.
 int SharedRuntime::c_calling_convention(const BasicType *sig_bt,
                                         VMRegPair *regs,
@@ -2035,6 +2037,8 @@ nmethod *SharedRuntime::generate_native_wrapper(MacroAssembler *masm,
   __ push_frame(frame_size_in_bytes, r_temp_1);          // Push the c2n adapter's frame.
   frame_done_pc = (intptr_t)__ pc();
 
+  __ verify_thread();
+
   // Native nmethod wrappers never take possesion of the oop arguments.
   // So the caller will gc the arguments.
   // The only thing we need an oopMap for is if the call is static.
@@ -2615,7 +2619,7 @@ uint SharedRuntime::out_preserve_stack_slots() {
 #endif
 }
 
-#ifdef COMPILER2
+#if defined(COMPILER1) || defined(COMPILER2)
 // Frame generation for deopt and uncommon trap blobs.
 static void push_skeleton_frame(MacroAssembler* masm, bool deopt,
                                 /* Read */
@@ -2773,7 +2777,7 @@ void SharedRuntime::generate_deopt_blob() {
 
   const address start = __ pc();
 
-#ifdef COMPILER2
+#if defined(COMPILER1) || defined(COMPILER2)
   // --------------------------------------------------------------------------
   // Prolog for non exception case!
 
@@ -2822,27 +2826,42 @@ void SharedRuntime::generate_deopt_blob() {
 
   BLOCK_COMMENT("Prolog for exception case");
 
-  // The RegisterSaves doesn't need to adjust the return pc for this situation.
-  const int return_pc_adjustment_exception = 0;
-
-  // Push the "unpack frame".
-  // Save everything in sight.
-  assert(R4 == R4_ARG2, "exception pc must be in r4");
-  RegisterSaver::push_frame_reg_args_and_save_live_registers(masm,
-                                                             &first_frame_size_in_bytes,
-                                                             /*generate_oop_map=*/ false,
-                                                             return_pc_adjustment_exception,
-                                                             RegisterSaver::return_pc_is_r4);
-
-  // Deopt during an exception. Save exec mode for unpack_frames.
-  __ li(exec_mode_reg, Deoptimization::Unpack_exception);
-
   // Store exception oop and pc in thread (location known to GC).
   // This is needed since the call to "fetch_unroll_info()" may safepoint.
   __ std(R3_ARG1, in_bytes(JavaThread::exception_oop_offset()), R16_thread);
   __ std(R4_ARG2, in_bytes(JavaThread::exception_pc_offset()),  R16_thread);
+  __ std(R4_ARG2, _abi(lr), R1_SP);
+
+  // Vanilla deoptimization with an exception pending in exception_oop.
+  int exception_in_tls_offset = __ pc() - start;
+
+  // Push the "unpack frame".
+  // Save everything in sight.
+  RegisterSaver::push_frame_reg_args_and_save_live_registers(masm,
+                                                             &first_frame_size_in_bytes,
+                                                             /*generate_oop_map=*/ false,
+                                                             /*return_pc_adjustment_exception=*/ 0,
+                                                             RegisterSaver::return_pc_is_pre_saved);
+
+  // Deopt during an exception. Save exec mode for unpack_frames.
+  __ li(exec_mode_reg, Deoptimization::Unpack_exception);
 
   // fall through
+
+  int reexecute_offset = 0;
+#ifdef COMPILER1
+  __ b(exec_mode_initialized);
+
+  // Reexecute entry, similar to c2 uncommon trap
+  reexecute_offset = __ pc() - start;
+
+  RegisterSaver::push_frame_reg_args_and_save_live_registers(masm,
+                                                             &first_frame_size_in_bytes,
+                                                             /*generate_oop_map=*/ false,
+                                                             /*return_pc_adjustment_reexecute=*/ 0,
+                                                             RegisterSaver::return_pc_is_pre_saved);
+  __ li(exec_mode_reg, Deoptimization::Unpack_reexecute);
+#endif
 
   // --------------------------------------------------------------------------
   __ BIND(exec_mode_initialized);
@@ -2856,7 +2875,7 @@ void SharedRuntime::generate_deopt_blob() {
   __ set_last_Java_frame(R1_SP, noreg);
 
   // With EscapeAnalysis turned on, this call may safepoint!
-  __ call_VM_leaf(CAST_FROM_FN_PTR(address, Deoptimization::fetch_unroll_info), R16_thread);
+  __ call_VM_leaf(CAST_FROM_FN_PTR(address, Deoptimization::fetch_unroll_info), R16_thread, exec_mode_reg);
   address calls_return_pc = __ last_calls_return_pc();
   // Set an oopmap for the call site that describes all our saved registers.
   oop_maps->add_gc_map(calls_return_pc - start, map);
@@ -2869,6 +2888,8 @@ void SharedRuntime::generate_deopt_blob() {
   // by save_volatile_registers(...).
   RegisterSaver::restore_result_registers(masm, first_frame_size_in_bytes);
 
+  // reload the exec mode from the UnrollBlock (it might have changed)
+  __ lwz(exec_mode_reg, Deoptimization::UnrollBlock::unpack_kind_offset_in_bytes(), unroll_block_reg);
   // In excp_deopt_mode, restore and clear exception oop which we
   // stored in the thread during exception entry above. The exception
   // oop will be the return value of this stub.
@@ -2881,11 +2902,6 @@ void SharedRuntime::generate_deopt_blob() {
   __ std(R0, in_bytes(JavaThread::exception_pc_offset()),  R16_thread);
   __ std(R0, in_bytes(JavaThread::exception_oop_offset()), R16_thread);
   __ BIND(skip_restore_excp);
-
-  // reload narrro_oop_base
-  if (UseCompressedOops && Universe::narrow_oop_base() != 0) {
-    __ load_const_optimized(R30, Universe::narrow_oop_base());
-  }
 
   __ pop_frame();
 
@@ -2941,16 +2957,8 @@ void SharedRuntime::generate_deopt_blob() {
   // optional c2i, caller of deoptee, ...).
 
   // Initialize R14_state.
-#ifdef CC_INTERP
-  __ ld(R14_state, 0, R1_SP);
-  __ addi(R14_state, R14_state, -frame::interpreter_frame_cinterpreterstate_size_in_bytes());
-  // Also inititialize R15_prev_state.
-  __ restore_prev_state();
-#else
   __ restore_interpreter_state(R11_scratch1);
   __ load_const_optimized(R25_templateTableBase, (address)Interpreter::dispatch_table((TosState)0), R11_scratch1);
-#endif // CC_INTERP
-
 
   // Return to the interpreter entry point.
   __ blr();
@@ -2960,7 +2968,9 @@ void SharedRuntime::generate_deopt_blob() {
   int exception_offset = __ pc() - start;
 #endif // COMPILER2
 
-  _deopt_blob = DeoptimizationBlob::create(&buffer, oop_maps, 0, exception_offset, 0, first_frame_size_in_bytes / wordSize);
+  _deopt_blob = DeoptimizationBlob::create(&buffer, oop_maps, 0, exception_offset,
+                                           reexecute_offset, first_frame_size_in_bytes / wordSize);
+  _deopt_blob->set_unpack_with_exception_in_tls_offset(exception_in_tls_offset);
 }
 
 #ifdef COMPILER2
@@ -3004,8 +3014,9 @@ void SharedRuntime::generate_uncommon_trap_blob() {
   __ set_last_Java_frame(/*sp*/R1_SP, /*pc*/R11_scratch1);
 
   __ mr(klass_index_reg, R3);
+  __ li(R5_ARG3, Deoptimization::Unpack_uncommon_trap);
   __ call_VM_leaf(CAST_FROM_FN_PTR(address, Deoptimization::uncommon_trap),
-                  R16_thread, klass_index_reg);
+                  R16_thread, klass_index_reg, R5_ARG3);
 
   // Set an oopmap for the call site.
   oop_maps->add_gc_map(gc_map_pc - start, map);
@@ -3024,6 +3035,12 @@ void SharedRuntime::generate_uncommon_trap_blob() {
   __ pop_frame();
 
   // stack: (caller_of_deoptee, ...).
+
+#ifdef ASSERT
+  __ lwz(R22_tmp2, Deoptimization::UnrollBlock::unpack_kind_offset_in_bytes(), unroll_block_reg);
+  __ cmpdi(CCR0, R22_tmp2, (unsigned)Deoptimization::Unpack_uncommon_trap);
+  __ asm_assert_eq("SharedRuntime::generate_deopt_blob: expected Unpack_uncommon_trap", 0);
+#endif
 
   // Allocate new interpreter frame(s) and possibly a c2i adapter
   // frame.
@@ -3069,16 +3086,8 @@ void SharedRuntime::generate_uncommon_trap_blob() {
   // stack: (top interpreter frame, ..., optional interpreter frame,
   // optional c2i, caller of deoptee, ...).
 
-#ifdef CC_INTERP
-  // Initialize R14_state, ...
-  __ ld(R11_scratch1, 0, R1_SP);
-  __ addi(R14_state, R11_scratch1, -frame::interpreter_frame_cinterpreterstate_size_in_bytes());
-  // also initialize R15_prev_state.
-  __ restore_prev_state();
-#else
   __ restore_interpreter_state(R11_scratch1);
   __ load_const_optimized(R25_templateTableBase, (address)Interpreter::dispatch_table((TosState)0), R11_scratch1);
-#endif // CC_INTERP
 
   // Return to the interpreter entry point.
   __ blr();
