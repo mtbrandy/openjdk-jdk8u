@@ -468,6 +468,11 @@ class Assembler : public AbstractAssembler {
     LVSL_OPCODE    = (31u << OPCODE_SHIFT |    6u << 1),
     LVSR_OPCODE    = (31u << OPCODE_SHIFT |   38u << 1),
 
+    // Vector-Scalar (VSX) instruction support.
+    MTVSRD_OPCODE  = (31u << OPCODE_SHIFT |  179u << 1),     // XX1-FORM
+    MTVSRWA_OPCODE = (31u << OPCODE_SHIFT |  211u << 1),     // XX1-FORM
+    MFVSRD_OPCODE  = (31u << OPCODE_SHIFT |  51u  << 1),     // XX1-FORM
+
     // Vector Permute and Formatting
     VPKPX_OPCODE   = (4u  << OPCODE_SHIFT |  782u     ),
     VPKSHSS_OPCODE = (4u  << OPCODE_SHIFT |  398u     ),
@@ -1935,6 +1940,11 @@ class Assembler : public AbstractAssembler {
   // Vector Floating-Point not implemented yet
   inline void mtvscr(   VectorRegister b);
   inline void mfvscr(   VectorRegister d);
+
+  // Vector-Scalar (VSX) instructions.
+  inline void mtfprd(   FloatRegister   d, Register a);
+  inline void mtfprwa(  FloatRegister   d, Register a);
+  inline void mffprd(   Register        a, FloatRegister d);
 
   // AES (introduced with Power 8)
   inline void vcipher(     VectorRegister d, VectorRegister a, VectorRegister b);

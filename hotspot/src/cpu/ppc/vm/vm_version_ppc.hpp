@@ -86,6 +86,9 @@ public:
   static bool has_vand()    { return (_features & vand_m) != 0; }
   static bool has_dcba()    { return (_features & dcba_m) != 0; }
   static bool has_vcipher() { return (_features & vcipher_m) != 0; }
+  static bool has_mtfprd()  { return has_vcipher(); } // alias for P8
+  static bool has_mtfprwa() { return has_vcipher(); } // alias for P8
+  static bool has_mffprd()  { return has_vcipher(); } // alias for P8
 
   static const char* cpu_features() { return _features_str; }
 
