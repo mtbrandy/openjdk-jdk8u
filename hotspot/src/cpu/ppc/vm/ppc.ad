@@ -2592,7 +2592,13 @@ encode %{
       ((loadConL_hiNode*)this)->_cbuf_insts_offset = __ offset();
     }
 
-    __ addis($dst$$Register, $toc$$Register, MacroAssembler::largeoffset_si16_si16_hi(_const_toc_offset));
+    const int hi = MacroAssembler::largeoffset_si16_si16_hi(_const_toc_offset);
+    const int lo = MacroAssembler::largeoffset_si16_si16_lo(_const_toc_offset);
+    if (hi == 0) {
+      __ ld($dst$$Register, lo, $toc$$Register);
+    } else {
+      __ addis($dst$$Register, $toc$$Register, hi);
+    }
   %}
 
 %} // encode
@@ -2629,7 +2635,7 @@ loadConLNodesTuple loadConLNodesTuple_create(Compile *C, PhaseRegAlloc *ra_, Nod
     m2->_opnds[2] = new (C) iRegLdstOper(); // base
 
     // Initialize ins_attrib TOC fields.
-    m1->_const_toc_offset = -1;
+    m1->_const_toc_offset = 0x43210; // assume large constant pool (worst case for size estimate)
     m2->_const_toc_offset_hi_node = m1;
 
     // Initialize ins_attrib instruction offset.
@@ -2753,7 +2759,13 @@ encode %{
       ((loadConP_hiNode*)this)->_const_toc_offset = toc_offset;
     }
 
-    __ addis($dst$$Register, $toc$$Register, MacroAssembler::largeoffset_si16_si16_hi(_const_toc_offset));
+    const int hi = MacroAssembler::largeoffset_si16_si16_hi(_const_toc_offset);
+    const int lo = MacroAssembler::largeoffset_si16_si16_lo(_const_toc_offset);
+    if (hi == 0) {
+      __ ld($dst$$Register, lo, $toc$$Register);
+    } else {
+      __ addis($dst$$Register, $toc$$Register, hi);
+    }
   %}
 
   // Postalloc expand emitter for loading a ptr constant from the method's TOC.
@@ -2779,7 +2791,7 @@ encode %{
       m2->_opnds[2] = new (C) iRegLdstOper(); // base
 
       // Initialize ins_attrib TOC fields.
-      m1->_const_toc_offset = -1;
+      m1->_const_toc_offset = 0x43210; // assume large constant pool (worst case for size estimate)
       m2->_const_toc_offset_hi_node = m1;
 
       // Register allocation for new nodes.
@@ -5987,11 +5999,17 @@ instruct loadConL_lo(iRegLdst dst, immL src, iRegLdst base) %{
   ins_field_const_toc_offset_hi_node(loadConL_hiNode*);
 
   format %{ "LD      $dst, offset, $base \t// load long $src from TOC (lo)" %}
-  size(4);
+  size(4); // worst case
   ins_encode %{
     // TODO: PPC port $archOpcode(ppc64Opcode_ld);
     int offset = ra_->C->in_scratch_emit_size() ? 0 : _const_toc_offset_hi_node->_const_toc_offset;
-    __ ld($dst$$Register, MacroAssembler::largeoffset_si16_si16_lo(offset), $base$$Register);
+    const int hi = MacroAssembler::largeoffset_si16_si16_hi(offset);
+    const int lo = MacroAssembler::largeoffset_si16_si16_lo(offset);
+    if (hi == 0) {
+      __ mr_if_needed($dst$$Register, $base$$Register);
+    } else {
+      __ ld($dst$$Register, lo, $base$$Register);
+    }
   %}
   ins_pipe(pipe_class_memory);
 %}
@@ -6249,11 +6267,17 @@ instruct loadConP_lo(iRegPdst dst, immP_NM src, iRegLdst base) %{
   ins_field_const_toc_offset_hi_node(loadConP_hiNode*);
 
   format %{ "LD      $dst, offset, $base \t// load ptr $src from TOC (lo)" %}
-  size(4);
+  size(4); // worst case
   ins_encode %{
     // TODO: PPC port $archOpcode(ppc64Opcode_ld);
     int offset = ra_->C->in_scratch_emit_size() ? 0 : _const_toc_offset_hi_node->_const_toc_offset;
-    __ ld($dst$$Register, MacroAssembler::largeoffset_si16_si16_lo(offset), $base$$Register);
+    const int hi = MacroAssembler::largeoffset_si16_si16_hi(offset);
+    const int lo = MacroAssembler::largeoffset_si16_si16_lo(offset);
+    if (hi == 0) {
+      __ mr_if_needed($dst$$Register, $base$$Register);
+    } else {
+      __ ld($dst$$Register, lo, $base$$Register);
+    }
   %}
   ins_pipe(pipe_class_memory);
 %}
@@ -6305,7 +6329,7 @@ instruct loadConFComp(regF dst, immF src, iRegLdst toc) %{
   format %{ "ADDIS   $toc, $toc, offset_hi\n\t"
             "LFS     $dst, offset_lo, $toc \t// load float $src from TOC (hi/lo)\n\t"
             "ADDIS   $toc, $toc, -offset_hi"%}
-  size(12);
+  size(12); // worst case
   ins_encode %{
     // TODO: PPC port $archOpcode(ppc64Opcode_compound);
     FloatRegister Rdst    = $dst$$FloatRegister;
@@ -6315,9 +6339,13 @@ instruct loadConFComp(regF dst, immF src, iRegLdst toc) %{
     int hi = (offset + (1<<15))>>16;
     int lo = offset - hi * (1<<16);
 
-    __ addis(Rtoc, Rtoc, hi);
-    __ lfs(Rdst, lo, Rtoc);
-    __ addis(Rtoc, Rtoc, -hi);
+    if (hi == 0) {
+      __ lfs(Rdst, lo, Rtoc);
+    } else {
+      __ addis(Rtoc, Rtoc, hi);
+      __ lfs(Rdst, lo, Rtoc);
+      __ addis(Rtoc, Rtoc, -hi);
+    }
   %}
   ins_pipe(pipe_class_memory);
 %}
@@ -6361,7 +6389,7 @@ instruct loadConDComp(regD dst, immD src, iRegLdst toc) %{
   format %{ "ADDIS   $toc, $toc, offset_hi\n\t"
             "LFD     $dst, offset_lo, $toc \t// load double $src from TOC (hi/lo)\n\t"
             "ADDIS   $toc, $toc, -offset_hi" %}
-  size(12);
+  size(12); // worst case
   ins_encode %{
     // TODO: PPC port $archOpcode(ppc64Opcode_compound);
     FloatRegister Rdst    = $dst$$FloatRegister;
@@ -6371,9 +6399,13 @@ instruct loadConDComp(regD dst, immD src, iRegLdst toc) %{
     int hi = (offset + (1<<15))>>16;
     int lo = offset - hi * (1<<16);
 
-    __ addis(Rtoc, Rtoc, hi);
-    __ lfd(Rdst, lo, Rtoc);
-    __ addis(Rtoc, Rtoc, -hi);
+    if (hi == 0) {
+      __ lfd(Rdst, lo, Rtoc);
+    } else {
+      __ addis(Rtoc, Rtoc, hi);
+      __ lfd(Rdst, lo, Rtoc);
+      __ addis(Rtoc, Rtoc, -hi);
+    }
   %}
   ins_pipe(pipe_class_memory);
 %}
