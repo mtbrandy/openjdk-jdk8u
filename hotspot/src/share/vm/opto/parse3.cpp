@@ -227,9 +227,15 @@ void Parse::do_get_xxx(Node* obj, ciField* field, bool is_field) {
   } else {
     type = Type::get_const_basic_type(bt);
   }
+#ifdef TARGET_ARCH_ppc
+  if (!VolatileReadOpt) {
+#endif
   if (support_IRIW_for_not_multiple_copy_atomic_cpu && field->is_volatile()) {
     insert_mem_bar(Op_MemBarVolatile);   // StoreLoad barrier
   }
+#ifdef TARGET_ARCH_ppc
+  }
+#endif
   // Build the load.
   //
   MemNode::MemOrd mo = is_vol ? MemNode::acquire : MemNode::unordered;
@@ -321,6 +327,11 @@ void Parse::do_put_xxx(Node* obj, ciField* field, bool is_field) {
   // floating up before the volatile write.
   if (is_vol) {
     // If not multiple copy atomic, we do the MemBarVolatile before the load.
+#ifdef TARGET_ARCH_ppc
+    if (VolatileReadOpt) {
+      insert_mem_bar(Op_MemBarVolatile); // Use fat membar
+    } else
+#endif
     if (!support_IRIW_for_not_multiple_copy_atomic_cpu) {
       insert_mem_bar(Op_MemBarVolatile); // Use fat membar
     }
