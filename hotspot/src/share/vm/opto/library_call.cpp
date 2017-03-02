@@ -2683,9 +2683,15 @@ bool LibraryCallKit::inline_unsafe_access(bool is_native_ptr, bool is_store, Bas
     if (is_store) {
       insert_mem_bar(Op_MemBarRelease);
     } else {
+#ifdef TARGET_ARCH_ppc
+      if (!VolatileReadOpt) {
+#endif
       if (support_IRIW_for_not_multiple_copy_atomic_cpu) {
         insert_mem_bar(Op_MemBarVolatile);
       }
+#ifdef TARGET_ARCH_ppc
+      }
+#endif
     }
   }
 
@@ -2781,6 +2787,11 @@ bool LibraryCallKit::inline_unsafe_access(bool is_native_ptr, bool is_store, Bas
     if (!is_store) {
       insert_mem_bar(Op_MemBarAcquire);
     } else {
+#ifdef TARGET_ARCH_ppc
+      if (VolatileReadOpt) {
+        insert_mem_bar(Op_MemBarVolatile);
+      } else
+#endif
       if (!support_IRIW_for_not_multiple_copy_atomic_cpu) {
         insert_mem_bar(Op_MemBarVolatile);
       }
