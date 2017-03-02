@@ -106,6 +106,9 @@ define_pd_global(uintx, TypeProfileLevel, 0);
   product(bool, InsertEndGroupPPC64, false,                                 \
           "Insert EndGroup instructions to optimize for Power6.")           \
                                                                             \
+  product(bool, VolatileReadOpt, true,                                      \
+          "Use isync for each volatile read")                               \
+                                                                            \
   /* Trap based checks. */                                                  \
   /* Trap based checks use the ppc trap instructions to check certain */    \
   /* conditions. This instruction raises a SIGTRAP caught by the      */    \
