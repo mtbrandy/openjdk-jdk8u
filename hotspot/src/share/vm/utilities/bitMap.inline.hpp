@@ -175,9 +175,13 @@ BitMap::get_next_one_offset_inline(idx_t l_offset, idx_t r_offset) const {
   idx_t res = map(index) >> pos;
   if (res != (uintptr_t)NoBits) {
     // find the position of the 1-bit
+#ifdef TARGET_COMPILER_gcc
+    res_offset += __builtin_ctzl(res);
+#else
     for (; !(res & 1); res_offset++) {
       res = res >> 1;
     }
+#endif
 
 #ifdef ASSERT
     // In the following assert, if r_offset is not bitamp word aligned,
@@ -209,10 +213,14 @@ BitMap::get_next_one_offset_inline(idx_t l_offset, idx_t r_offset) const {
     res = map(index);
     if (res != (uintptr_t)NoBits) {
       // found a 1, return the offset
+#ifdef TARGET_COMPILER_gcc
+      res_offset = bit_index(index) + __builtin_ctzl(res);
+#else
       for (res_offset = bit_index(index); !(res & 1); res_offset++) {
         res = res >> 1;
       }
       assert(res & 1, "tautology; see loop condition");
+#endif
       assert(res_offset >= l_offset, "just checking");
       return MIN2(res_offset, r_offset);
     }
@@ -239,9 +247,13 @@ BitMap::get_next_zero_offset_inline(idx_t l_offset, idx_t r_offset) const {
 
   if (res != (uintptr_t)AllBits) {
     // find the position of the 0-bit
+#ifdef TARGET_COMPILER_gcc
+    res_offset += __builtin_ctzl(~res);
+#else
     for (; res & 1; res_offset++) {
       res = res >> 1;
     }
+#endif
     assert(res_offset >= l_offset, "just checking");
     return MIN2(res_offset, r_offset);
   }
@@ -250,11 +262,15 @@ BitMap::get_next_zero_offset_inline(idx_t l_offset, idx_t r_offset) const {
     res = map(index);
     if (res != (uintptr_t)AllBits) {
       // found a 0, return the offset
+#ifdef TARGET_COMPILER_gcc
+      res_offset = (index << LogBitsPerWord) + __builtin_ctzl(~res);
+#else
       for (res_offset = index << LogBitsPerWord; res & 1;
            res_offset++) {
         res = res >> 1;
       }
       assert(!(res & 1), "tautology; see loop condition");
+#endif
       assert(res_offset >= l_offset, "just checking");
       return MIN2(res_offset, r_offset);
     }
@@ -280,9 +296,13 @@ BitMap::get_next_one_offset_inline_aligned_right(idx_t l_offset,
   idx_t res = map(index) >> bit_in_word(res_offset);
   if (res != (uintptr_t)NoBits) {
     // find the position of the 1-bit
+#ifdef TARGET_COMPILER_gcc
+    res_offset += __builtin_ctzl(res);
+#else
     for (; !(res & 1); res_offset++) {
       res = res >> 1;
     }
+#endif
     assert(res_offset >= l_offset &&
            res_offset < r_offset, "just checking");
     return res_offset;
@@ -292,10 +312,14 @@ BitMap::get_next_one_offset_inline_aligned_right(idx_t l_offset,
     res = map(index);
     if (res != (uintptr_t)NoBits) {
       // found a 1, return the offset
+#ifdef TARGET_COMPILER_gcc
+      res_offset = bit_index(index) + __builtin_ctzl(res);
+#else
       for (res_offset = bit_index(index); !(res & 1); res_offset++) {
         res = res >> 1;
       }
       assert(res & 1, "tautology; see loop condition");
+#endif
       assert(res_offset >= l_offset && res_offset < r_offset, "just checking");
       return res_offset;
     }
