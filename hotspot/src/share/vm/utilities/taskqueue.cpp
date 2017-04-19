@@ -204,9 +204,23 @@ ParallelTaskTerminator::offer_termination(TerminatorTerminator* terminator) {
           // Increase the hard spinning period but only up to a limit.
           hard_spin_limit = MIN2(2*hard_spin_limit,
                                  (uint) WorkStealingHardSpins);
+#if defined(PPC64)
+	  // Reduce SMT thread priority via [or Rx,Rx,Rx]
+	  // ... where Rx is interpretted as follows:
+	  //    31: very low
+	  //     1: low
+	  //     6: medium low
+	  //     2: medium
+	  asm("or 31,31,31");
+#endif
           for (uint j = 0; j < hard_spin_limit; j++) {
             SpinPause();
           }
+#if defined(PPC64)
+	  // Restore SMT thread priority
+	  // Assumes priority defaults medium low.
+	  asm("or 6,6,6");
+#endif
           hard_spin_count++;
 #ifdef TRACESPINNING
           _total_spins++;
