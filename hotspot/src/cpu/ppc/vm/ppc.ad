@@ -913,9 +913,125 @@ source_hpp %{
   // will do an acquire. If so, this node must not do the acquire
   // operation.
   bool followed_by_acquire(const Node *n);
+
+  // Returns true if loaded 4 bytes are contiguous.
+  bool is_contiguousBytes(const Node *n, bool isTopAddI);
 %}
 
 source %{
+
+// Check if loaded 4 bytes are contiguous.
+//
+//                        (MoveI2F)
+//                            |
+//                          AddI
+//                            |
+//                  +---------+--------+
+//                  |                  |
+//                AddI              LShiftI
+//                  |                  |
+//          +-------+-------+       +--+--+
+//          |               |       |     |
+//        AddI           LShiftI  LoadB  ConI(24)
+//          |               |       |
+//      +---+---+        +--+--+   mem
+//      |       |        |     |
+//   LShiftl  LoadUB  LoadUB  ConI(16)
+//      |       |        |
+//   +--+--+   mem      mem
+//   |     |
+// loadUB ConI(8)
+//   |
+//  mem
+//
+bool is_contiguousBytes(const Node *n, bool isTopAddI) {
+  Node *load1_base = NULL;
+  Node *load2_base = NULL;
+  Node *load3_base = NULL;
+  Node *load4_base = NULL;
+  int load1_offset = 0;
+  int load2_offset = 0;
+  int load3_offset = 0;
+  int load4_offset = 0;
+
+  Node *node1 = NULL;
+  Node *node2 = NULL;
+  Node *node3 = NULL;
+  Node *node4 = NULL;
+
+  if (isTopAddI) {
+    Node *node0 = n->in(1);
+    if (node0->Opcode() == Op_AddI) {
+      node1 = n->in(2)->in(1);
+      node2 = n->in(1)->in(1)->in(1)->in(1);
+      node3 = n->in(1)->in(2)->in(1);
+      node4 = n->in(1)->in(1)->in(2);
+    } else {
+      node1 = n->in(1)->in(1);
+      node2 = n->in(2)->in(2)->in(1)->in(1);
+      node3 = n->in(2)->in(1)->in(1);
+      node4 = n->in(2)->in(2)->in(2);
+    }
+  } else {
+    Node *node0 = n->in(1)->in(1);
+    if (node0->Opcode() == Op_AddI) {
+      node1 = n->in(1)->in(2)->in(1);
+      node2 = n->in(1)->in(1)->in(1)->in(1)->in(1);
+      node3 = n->in(1)->in(1)->in(2)->in(1);
+      node4 = n->in(1)->in(1)->in(1)->in(2);
+    } else {
+      node1 = n->in(1)->in(1)->in(1);
+      node2 = n->in(1)->in(2)->in(2)->in(1)->in(1);
+      node3 = n->in(1)->in(2)->in(1)->in(1);
+      node4 = n->in(1)->in(2)->in(2)->in(2);
+    }
+  }
+
+  assert (node1->Opcode() == Op_LoadB, "Node1 should be LoadB.");
+  assert (node2->Opcode() == Op_LoadUB, "Node2 should be LoadUB.");
+  assert (node3->Opcode() == Op_LoadUB, "Node3 should be LoadUB.");
+  assert (node4->Opcode() == Op_LoadUB, "Node4 should be LoadUB.");
+
+  LoadBNode *load1 = (LoadBNode *) node1;
+  Node *adr1 = load1->in(MemNode::Address);
+  load1_base = adr1->in(1);
+  const TypePtr* tp1 = adr1->bottom_type()->isa_ptr();
+  load1_offset = tp1->offset();
+
+  LoadUBNode *load2 = (LoadUBNode *) node2;
+  Node *adr2 = load2->in(MemNode::Address);
+  load2_base = adr2->in(1);
+  const TypePtr* tp2 = adr2->bottom_type()->isa_ptr();
+  load2_offset = tp2->offset();
+
+  LoadUBNode *load3 = (LoadUBNode *) node3;
+  Node *adr3 = load3->in(MemNode::Address);
+  load3_base = adr3->in(1);
+  const TypePtr* tp3 = adr3->bottom_type()->isa_ptr();
+  load3_offset = tp3->offset();
+
+  LoadUBNode *load4 = (LoadUBNode *) node4;
+  Node *adr4 = load4->in(MemNode::Address);
+  load4_base = adr4->in(1);
+  const TypePtr* tp4 = adr4->bottom_type()->isa_ptr();
+  load4_offset = tp4->offset();
+
+  if (
+    load1_base == load2_base &&
+    load1_base == load3_base &&
+    load1_base == load4_base &&
+    load4_offset + 1 == load2_offset &&
+    load2_offset + 1 == load3_offset &&
+    load3_offset + 1 == load1_offset &&
+    load1->is_unordered() && 
+    load2->is_unordered() && 
+    load3->is_unordered() && 
+    load4->is_unordered()) {
+    return true;
+  }
+
+  return false;
+}
 
 // Optimize load-acquire.
 //
@@ -4250,6 +4366,15 @@ operand immI_minus1() %{
   interface(CONST_INTER);
 %}
 
+// int value 8.
+operand immI_8() %{
+  predicate(n->get_int() == 8);
+  match(ConI);
+  op_cost(0);
+  format %{ %}
+  interface(CONST_INTER);
+%}
+
 // int value 16.
 operand immI_16() %{
   predicate(n->get_int() == 16);
@@ -5506,6 +5631,18 @@ instruct loadUI2L(iRegLdst dst, memory mem, immL_32bits mask) %{
   format %{ "LWZ     $dst, $mem \t// zero-extend to long" %}
   size(4);
   ins_encode( enc_lwz(dst, mem) );
+  ins_pipe(pipe_class_memory);
+%}
+
+instruct loadI_reverse(iRegIdst dst, indirect mem) %{
+  match(Set dst (LoadI mem));
+  predicate(false);
+  ins_cost(MEMORY_REF_COST);
+
+  size(4);
+  ins_encode %{
+    __ lwbrx($dst$$Register, $mem$$base$$Register);
+  %}
   ins_pipe(pipe_class_memory);
 %}
 
@@ -8358,6 +8495,30 @@ instruct maskI_reg_imm(iRegIdst dst, iRegIsrc src, uimmI6 mask) %{
   %}
   ins_pipe(pipe_class_default);
 %}
+
+instruct loadI_byte_reverse_int(iRegIdst dst, memory mem2, immI_8 eight, indirect mem4, memory mem3, immI_16 sixteen, indOffset16 mem1, immI_24 twentyfour) %{
+  match(Set dst (AddI (AddI (AddI (LShiftI (LoadUB mem2) eight) (LoadUB mem4)) (LShiftI (LoadUB mem3) sixteen)) (LShiftI (LoadB mem1) twentyfour)));
+  predicate(is_contiguousBytes(n, true));
+
+  expand %{
+#ifdef LITTLE_ENDIAN
+    loadI(dst, mem4);
+#else
+    loadI_reverse(dst, mem4);
+#endif
+  %}
+%}
+
+#ifdef LITTLE_ENDIAN
+instruct loadF_byte_reverse_int(regF dst, memory mem2, immI_8 eight, memory mem4, memory mem3, immI_16 sixteen, indOffset16 mem1, immI_24 twentyfour) %{
+  match(Set dst (MoveI2F (AddI (AddI (AddI (LShiftI (LoadUB mem2) eight) (LoadUB mem4)) (LShiftI (LoadUB mem3) sixteen)) (LShiftI (LoadB mem1) twentyfour))));
+  predicate(is_contiguousBytes(n, false));
+
+  expand %{
+    loadF(dst, mem4);
+  %}
+%}
+#endif
 
 instruct lShiftI_reg_reg(iRegIdst dst, iRegIsrc src1, iRegIsrc src2) %{
   // no match-rule, false predicate
