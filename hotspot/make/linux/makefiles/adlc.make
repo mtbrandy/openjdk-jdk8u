@@ -139,6 +139,12 @@ endif
 # Pass -D flags into ADLC.
 ADLCFLAGS += $(SYSDEFS)
 
+ifeq ($(ARCH), ppc)
+  ifeq ($(shell uname -m), ppc64le)
+    ADLCFLAGS += -DLITTLE_ENDIAN 
+  endif
+endif
+
 # Note "+="; it is a hook so flags.make can add more flags, like -g or -DFOO.
 ADLCFLAGS += -q -T
 
