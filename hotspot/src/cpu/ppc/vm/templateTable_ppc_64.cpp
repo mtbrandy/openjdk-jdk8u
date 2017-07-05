@@ -335,11 +335,11 @@ void TemplateTable::ldc(bool wide) {
 
   __ cmpwi(CCR0, Rscratch2, JVM_CONSTANT_UnresolvedClass); // Unresolved class?
   __ cmpwi(CCR1, Rscratch2, JVM_CONSTANT_UnresolvedClassInError); // Unresolved class in error state?
-  __ cror(/*CR0 eq*/2, /*CR1 eq*/4+2, /*CR0 eq*/2);
+  __ cror(CCR0, Assembler::equal, CCR1, Assembler::equal);
 
   // Resolved class - need to call vm to get java mirror of the class.
   __ cmpwi(CCR1, Rscratch2, JVM_CONSTANT_Class);
-  __ crnor(/*CR0 eq*/2, /*CR1 eq*/4+2, /*CR0 eq*/2); // Neither resolved class nor unresolved case from above?
+  __ crnor(CCR0, Assembler::equal, CCR1, Assembler::equal); // Neither resolved class nor unresolved case from above?
   __ beq(CCR0, notClass);
 
   __ li(R4, wide ? 1 : 0);
@@ -1625,12 +1625,13 @@ void TemplateTable::branch(bool is_jsr, bool is_wide) {
   // --------------------------------------------------------------------------
   // Normal (non-jsr) branch handling
 
+  // Bump bytecode pointer by displacement (take the branch).
+  __ add(R14_bcp, Rdisp, R14_bcp); // Add to bc addr.
+
   const bool increment_invocation_counter_for_backward_branches = UseCompiler && UseLoopCounter;
   if (increment_invocation_counter_for_backward_branches) {
-    //__ unimplemented("branch invocation counter");
-
     Label Lforward;
-    __ add(R14_bcp, Rdisp, R14_bcp); // Add to bc addr.
+    __ dispatch_prolog(vtos);
 
     // Check branch direction.
     __ cmpdi(CCR0, Rdisp, 0);
@@ -1667,17 +1668,17 @@ void TemplateTable::branch(bool is_jsr, bool is_wide) {
       __ lwz(Rscratch2, mo_bc_offs, R4_counters);
       __ load_const_optimized(Rscratch3, mask, R0);
       __ addi(Rscratch2, Rscratch2, increment);
-      __ stw(Rscratch2, mo_bc_offs, R19_method);
+      __ stw(Rscratch2, mo_bc_offs, R4_counters);
       __ and_(Rscratch3, Rscratch2, Rscratch3);
       __ bne(CCR0, Lforward);
 
       __ bind(Loverflow);
 
       // Notify point for loop, pass branch bytecode.
-      __ call_VM(noreg, CAST_FROM_FN_PTR(address, InterpreterRuntime::frequency_counter_overflow), R14_bcp, true);
+      __ subf(R4_ARG2, Rdisp, R14_bcp); // Compute branch bytecode (previous bcp).
+      __ call_VM(noreg, CAST_FROM_FN_PTR(address, InterpreterRuntime::frequency_counter_overflow), R4_ARG2, true);
 
       // Was an OSR adapter generated?
-      // O0 = osr nmethod
       __ cmpdi(CCR0, R3_RET, 0);
       __ beq(CCR0, Lforward);
 
@@ -1713,27 +1714,23 @@ void TemplateTable::branch(bool is_jsr, bool is_wide) {
       __ increment_backedge_counter(R4_counters, invoke_ctr, Rscratch2, Rscratch3);
 
       if (ProfileInterpreter) {
-        __ test_invocation_counter_for_mdp(invoke_ctr, Rscratch2, Lforward);
+        __ test_invocation_counter_for_mdp(invoke_ctr, R4_counters, Rscratch2, Lforward);
         if (UseOnStackReplacement) {
-          __ test_backedge_count_for_osr(bumped_count, R14_bcp, Rscratch2);
+          __ test_backedge_count_for_osr(bumped_count, R4_counters, R14_bcp, Rdisp, Rscratch2);
         }
       } else {
         if (UseOnStackReplacement) {
-          __ test_backedge_count_for_osr(invoke_ctr, R14_bcp, Rscratch2);
+          __ test_backedge_count_for_osr(invoke_ctr, R4_counters, R14_bcp, Rdisp, Rscratch2);
         }
       }
     }
 
     __ bind(Lforward);
+    __ dispatch_epilog(vtos);
 
   } else {
-    // Bump bytecode pointer by displacement (take the branch).
-    __ add(R14_bcp, Rdisp, R14_bcp); // Add to bc addr.
+    __ dispatch_next(vtos);
   }
-  // Continue with bytecode @ target.
-  // %%%%% Like Intel, could speed things up by moving bytecode fetch to code above,
-  // %%%%% and changing dispatch_next to dispatch_only.
-  __ dispatch_next(vtos);
 }
 
 // Helper function for if_cmp* methods below.
@@ -2525,6 +2522,8 @@ void TemplateTable::getfield_or_static(int byte_no, bool is_static) {
   __ lbzx(R17_tos, Rclass_or_obj, Roffset);
   __ extsb(R17_tos, R17_tos);
   __ push(ztos);
+// MH-20170414
+//  if (!is_static && rc == may_rewrite) {
   if (!is_static) {
     // use btos rewriting, no truncating to t/f bit is needed for getfield.
     patch_bytecode(Bytecodes::_fast_bgetfield, Rbc, Rscratch);
@@ -2643,7 +2642,7 @@ void TemplateTable::jvmti_post_field_mod(Register Rcache, Register Rscratch, boo
           __ cmpwi(CCR0, Rflags, ltos);
           __ cmpwi(CCR1, Rflags, dtos);
           __ addi(base, R15_esp, Interpreter::expr_offset_in_bytes(1));
-          __ crnor(/*CR0 eq*/2, /*CR1 eq*/4+2, /*CR0 eq*/2);
+          __ crnor(CCR0, Assembler::equal, CCR1, Assembler::equal);
           __ beq(CCR0, is_one_slot);
           __ addi(base, R15_esp, Interpreter::expr_offset_in_bytes(2));
           __ bind(is_one_slot);
@@ -2823,7 +2822,11 @@ void TemplateTable::putfield_or_static(int byte_no, bool is_static) {
   if (!is_static) { pop_and_check_object(Rclass_or_obj); } // Kills R11_scratch1.
   __ andi(R17_tos, R17_tos, 0x1);
   __ stbx(R17_tos, Rclass_or_obj, Roffset);
-  if (!is_static) { patch_bytecode(Bytecodes::_fast_zputfield, Rbc, Rscratch, true, byte_no); }
+// MH-20170414
+//  if (!is_static && rc == may_rewrite) {
+  if (!is_static) {
+    patch_bytecode(Bytecodes::_fast_zputfield, Rbc, Rscratch, true, byte_no);
+  }
   if (!support_IRIW_for_not_multiple_copy_atomic_cpu) {
     __ beq(CR_is_vol, Lvolatile); // Volatile?
   }
@@ -3630,7 +3633,7 @@ void TemplateTable::_new() {
     // Make sure klass does not have has_finalizer, or is abstract, or interface or java/lang/Class.
     __ andi_(R0, Rinstance_size, Klass::_lh_instance_slow_path_bit); // slow path bit equals 0?
 
-    __ crnand(/*CR0 eq*/2, /*CR1 eq*/4+2, /*CR0 eq*/2); // slow path bit set or not fully initialized?
+    __ crnand(CCR0, Assembler::equal, CCR1, Assembler::equal); // slow path bit set or not fully initialized?
     __ beq(CCR0, Lslow_case);
 
     // --------------------------------------------------------------------------

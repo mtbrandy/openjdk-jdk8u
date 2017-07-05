@@ -41,6 +41,9 @@ protected:
     popcntw,
     fcfids,
     vand,
+    lqarx,
+    tcheck,
+    mfdscr,
     dcba,
     vpmsumb,
     num_features // last entry to count features
@@ -57,7 +60,10 @@ protected:
     fcfids_m              = (1 << fcfids ),
     vand_m                = (1 << vand   ),
     dcba_m                = (1 << dcba   ),
+    lqarx_m               = (1 << lqarx  ),
     vpmsumb_m             = (1 << vpmsumb),
+    tcheck_m              = (1 << tcheck ),
+    mfdscr_m              = (1 << mfdscr ),
     all_features_m        = -1
   };
   static int  _features;
@@ -85,10 +91,12 @@ public:
   static bool has_fcfids()  { return (_features & fcfids_m) != 0; }
   static bool has_vand()    { return (_features & vand_m) != 0; }
   static bool has_dcba()    { return (_features & dcba_m) != 0; }
+  static bool has_lqarx()   { return (_features & lqarx_m) != 0; }
   static bool has_vpmsumb() { return (_features & vpmsumb_m) != 0; }
+  static bool has_tcheck()  { return (_features & tcheck_m) != 0; }
+  static bool has_mfdscr()  { return (_features & mfdscr_m) != 0; }
 
   static const char* cpu_features() { return _features_str; }
-
   static int get_cache_line_size()  { return _measured_cache_line_size; }
 
   // Assembler testing

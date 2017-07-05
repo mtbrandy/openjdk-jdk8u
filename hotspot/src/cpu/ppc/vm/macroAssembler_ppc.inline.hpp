@@ -70,9 +70,11 @@ inline void MacroAssembler::endgroup_if_needed(bool needed) {
 }
 
 inline void MacroAssembler::membar(int bits) {
-  // TODO: use elemental_membar(bits) for Power 8 and disable optimization of acquire-release
-  // (Matcher::post_membar_release where we use PPC64_ONLY(xop == Op_MemBarRelease ||))
-  if (bits & StoreLoad) sync(); else lwsync();
+  // Comment: Usage of elemental_membar(bits) is not recommended for Power 8.
+  // If elemental_membar(bits) is used, disable optimization of acquire-release
+  // (Matcher::post_membar_release where we use PPC64_ONLY(xop == Op_MemBarRelease ||))!
+  if (bits & StoreLoad) { sync(); }
+  else if (bits) { lwsync(); }
 }
 inline void MacroAssembler::release() { membar(LoadStore | StoreStore); }
 inline void MacroAssembler::acquire() { membar(LoadLoad | LoadStore); }
@@ -86,7 +88,7 @@ inline address MacroAssembler::global_toc() {
 // Offset of given address to the global TOC.
 inline int MacroAssembler::offset_to_global_toc(const address addr) {
   intptr_t offset = (intptr_t)addr - (intptr_t)MacroAssembler::global_toc();
-  assert(Assembler::is_simm((long)offset, 31) && offset >= 0, "must be in range");
+  assert(Assembler::is_uimm((long)offset, 31), "must be in range");
   return (int)offset;
 }
 
@@ -98,7 +100,7 @@ inline address MacroAssembler::method_toc() {
 // Offset of given address to current method's TOC.
 inline int MacroAssembler::offset_to_method_toc(address addr) {
   intptr_t offset = (intptr_t)addr - (intptr_t)method_toc();
-  assert(is_simm((long)offset, 31) && offset >= 0, "must be in range");
+  assert(Assembler::is_uimm((long)offset, 31), "must be in range");
   return (int)offset;
 }
 
@@ -190,13 +192,13 @@ inline bool MacroAssembler::is_bc_far_variant1_at(address instruction_addr) {
   // Variant 1, the 1st instruction contains the destination address:
   //
   //    bcxx  DEST
-  //    endgroup
+  //    nop
   //
   const int instruction_1 = *(int*)(instruction_addr);
   const int instruction_2 = *(int*)(instruction_addr + 4);
   return is_bcxx(instruction_1) &&
          (inv_bd_field(instruction_1, (intptr_t)instruction_addr) != (intptr_t)(instruction_addr + 2*4)) &&
-         is_endgroup(instruction_2);
+         is_nop(instruction_2);
 }
 
 // Relocation of conditional far branches.
@@ -302,20 +304,27 @@ inline void MacroAssembler::null_check_throw(Register a, int offset, Register te
   }
 }
 
-inline void MacroAssembler::load_with_trap_null_check(Register d, int si16, Register s1) {
-  if (!os::zero_page_read_protected()) {
+inline void MacroAssembler::null_check(Register a, int offset, Label *Lis_null) {
+  if (!ImplicitNullChecks || needs_explicit_null_check(offset) || !os::zero_page_read_protected()) {
     if (TrapBasedNullChecks) {
-      trap_null_check(s1);
+      assert(UseSIGTRAP, "sanity");
+      trap_null_check(a);
+    } else if (Lis_null){
+      Label ok;
+      cmpdi(CCR0, a, 0);
+      beq(CCR0, *Lis_null);
     }
   }
-  ld(d, si16, s1);
 }
 
-inline void MacroAssembler::load_heap_oop_not_null(Register d, RegisterOrConstant offs, Register s1) {
+inline void MacroAssembler::load_heap_oop_not_null(Register d, RegisterOrConstant offs, Register s1, Register tmp) {
   if (UseCompressedOops) {
-    lwz(d, offs, s1);
+    // In disjoint mode decoding can save a cycle if src != dst.
+    Register narrowOop = d;
+    lwz(narrowOop, offs, s1);
     // Attention: no null check here!
-    decode_heap_oop_not_null(d);
+    Register res = decode_heap_oop_not_null(d, narrowOop);
+    assert(res == d, "caller will not consume loaded value");
   } else {
     ld(d, offs, s1);
   }
@@ -330,51 +339,84 @@ inline void MacroAssembler::store_heap_oop_not_null(Register d, RegisterOrConsta
   }
 }
 
-inline void MacroAssembler::load_heap_oop(Register d, RegisterOrConstant offs, Register s1) {
+inline void MacroAssembler::load_heap_oop(Register d, RegisterOrConstant offs, Register s1, Label *is_null) {
   if (UseCompressedOops) {
     lwz(d, offs, s1);
-    decode_heap_oop(d);
+    if (is_null != NULL) {
+      cmpwi(CCR0, d, 0);
+      beq(CCR0, *is_null);
+      decode_heap_oop_not_null(d);
+    } else {
+      decode_heap_oop(d);
+    }
   } else {
     ld(d, offs, s1);
+    if (is_null != NULL) {
+      cmpdi(CCR0, d, 0);
+      beq(CCR0, *is_null);
+    }
   }
 }
 
 inline Register MacroAssembler::encode_heap_oop_not_null(Register d, Register src) {
-  Register current = (src!=noreg) ? src : d; // Compressed oop is in d if no src provided.
-  if (Universe::narrow_oop_base() != NULL) {
-    sub(d, current, R30);
-    current = d;
-  }
+  Register current = (src != noreg) ? src : d; // Oop to be compressed is in d if no src provided.
   if (Universe::narrow_oop_shift() != 0) {
-    srdi(d, current, LogMinObjAlignmentInBytes);
+    rldicl(d, current, 64-Universe::narrow_oop_shift(), 32);  // Clears the upper bits.
     current = d;
   }
   return current; // Encoded oop is in this register.
 }
 
-inline void MacroAssembler::decode_heap_oop_not_null(Register d) {
+inline Register MacroAssembler::encode_heap_oop(Register d, Register src) {
+  if (Universe::narrow_oop_base() != NULL) {
+    if (VM_Version::has_isel()) {
+      cmpdi(CCR0, src, 0);
+      Register co = encode_heap_oop_not_null(d, src);
+      assert(co == d, "sanity");
+      isel_0(d, CCR0, Assembler::equal);
+    } else {
+      Label isNull;
+      or_(d, src, src); // move and compare 0
+      beq(CCR0, isNull);
+      encode_heap_oop_not_null(d, src);
+      bind(isNull);
+    }
+    return d;
+  } else {
+    return encode_heap_oop_not_null(d, src);
+  }
+}
+
+inline Register MacroAssembler::decode_heap_oop_not_null(Register d, Register src) {
+  Register current = (src != noreg) ? src : d; // Compressed oop is in d if no src provided.
+
   if (Universe::narrow_oop_shift() != 0) {
-    assert (LogMinObjAlignmentInBytes == Universe::narrow_oop_shift(), "decode alg wrong");
-    sldi(d, d, LogMinObjAlignmentInBytes);
+    sldi(d, current, Universe::narrow_oop_shift());
+    current = d;
   }
   if (Universe::narrow_oop_base() != NULL) {
-    add(d, d, R30);
+    add_const_optimized(d, current, Universe::narrow_oop_base(), R0);
+    current = d;
   }
+  return current; // Decoded oop is in this register.
 }
 
 inline void MacroAssembler::decode_heap_oop(Register d) {
   Label isNull;
+  bool use_isel = false;
   if (Universe::narrow_oop_base() != NULL) {
     cmpwi(CCR0, d, 0);
-    beq(CCR0, isNull);
+    if (VM_Version::has_isel()) {
+      use_isel = true;
+    } else {
+      beq(CCR0, isNull);
+    }
   }
-  if (Universe::narrow_oop_shift() != 0) {
-    assert (LogMinObjAlignmentInBytes == Universe::narrow_oop_shift(), "decode alg wrong");
-    sldi(d, d, LogMinObjAlignmentInBytes);
+  decode_heap_oop_not_null(d);
+  if (use_isel) {
+    isel_0(d, CCR0, Assembler::equal);
   }
-  if (Universe::narrow_oop_base() != NULL) {
-    add(d, d, R30);
-  }
+
   bind(isNull);
 }
 

@@ -1114,7 +1114,7 @@ JRT_ENTRY(void, Runtime1::patch_code(JavaThread* thread, Runtime1::StubID stub_i
           }
 #endif
 
-          for (int i = NativeCall::instruction_size; i < *byte_count; i++) {
+          for (int i = NativeGeneralJump::instruction_size; i < *byte_count; i++) {
             address ptr = copy_buff + i;
             int a_byte = (*ptr) & 0xFF;
             address dst = instr_pc + i;
@@ -1146,7 +1146,7 @@ JRT_ENTRY(void, Runtime1::patch_code(JavaThread* thread, Runtime1::StubID stub_i
             relocInfo::change_reloc_info_for_address(&iter2, (address) instr_pc2,
                                                      relocInfo::none, rtype);
 #endif
-#ifdef PPC
+#ifdef PPC32
           { address instr_pc2 = instr_pc + NativeMovConstReg::lo_offset;
             RelocIterator iter2(nm, instr_pc2, instr_pc2 + 1);
             relocInfo::change_reloc_info_for_address(&iter2, (address) instr_pc2,

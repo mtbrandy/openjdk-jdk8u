@@ -649,11 +649,11 @@ class LIR_OprFact: public AllStatic {
                                                                              LIR_OprDesc::double_type          |
                                                                              LIR_OprDesc::fpu_register         |
                                                                              LIR_OprDesc::double_size); }
-  static LIR_Opr single_softfp(int reg)            { return (LIR_Opr)((reg  << LIR_OprDesc::reg1_shift)        |
+  static LIR_Opr single_softfp(int reg)            { return (LIR_Opr)(intptr_t)((reg  << LIR_OprDesc::reg1_shift)        |
                                                                              LIR_OprDesc::float_type           |
                                                                              LIR_OprDesc::cpu_register         |
                                                                              LIR_OprDesc::single_size); }
-  static LIR_Opr double_softfp(int reg1, int reg2) { return (LIR_Opr)((reg2 << LIR_OprDesc::reg1_shift)        |
+  static LIR_Opr double_softfp(int reg1, int reg2) { return (LIR_Opr)(intptr_t)((reg2 << LIR_OprDesc::reg1_shift)        |
                                                                              (reg1 << LIR_OprDesc::reg2_shift) |
                                                                              LIR_OprDesc::double_type          |
                                                                              LIR_OprDesc::cpu_register         |

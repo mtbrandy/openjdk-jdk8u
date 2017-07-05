@@ -1740,7 +1740,7 @@ void LIRGenerator::do_StoreField(StoreField* x) {
     post_barrier(object.result(), value.result());
   }
 
-  if (is_volatile && os::is_MP()) {
+  if (!support_IRIW_for_not_multiple_copy_atomic_cpu && is_volatile && os::is_MP()) {
     __ membar();
   }
 }
@@ -1799,6 +1799,10 @@ void LIRGenerator::do_LoadField(LoadField* x) {
     address = new LIR_Address(object.result(), PATCHED_ADDR, field_type);
   } else {
     address = generate_address(object.result(), x->offset(), field_type);
+  }
+
+  if (support_IRIW_for_not_multiple_copy_atomic_cpu && is_volatile && os::is_MP()) {
+    __ membar();
   }
 
   if (is_volatile && !needs_patching) {
@@ -2216,6 +2220,10 @@ void LIRGenerator::do_UnsafeGetObject(UnsafeGetObject* x) {
 
   LIR_Opr value = rlock_result(x, x->basic_type());
 
+  if (support_IRIW_for_not_multiple_copy_atomic_cpu && x->is_volatile() && os::is_MP()) {
+    __ membar();
+  }
+
   get_Object_unsafe(value, src.result(), off.result(), type, x->is_volatile());
 
 #if INCLUDE_ALL_GCS
@@ -2373,7 +2381,7 @@ void LIRGenerator::do_UnsafePutObject(UnsafePutObject* x) {
 
   if (x->is_volatile() && os::is_MP()) __ membar_release();
   put_Object_unsafe(src.result(), off.result(), data.result(), type, x->is_volatile());
-  if (x->is_volatile() && os::is_MP()) __ membar();
+  if (!support_IRIW_for_not_multiple_copy_atomic_cpu && x->is_volatile() && os::is_MP()) __ membar();
 }
 
 
