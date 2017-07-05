@@ -45,4 +45,8 @@ void Compile::pd_compiler2_init() {
       FLAG_SET_ERGO(bool, InsertEndGroupPPC64, true);
     }
   }
+
+  if (!VM_Version::has_isel() && FLAG_IS_DEFAULT(ConditionalMoveLimit)) {
+    FLAG_SET_ERGO(intx, ConditionalMoveLimit, 0);
+  }
 }
