@@ -127,13 +127,20 @@ address CompiledStaticCall::emit_to_interp_stub(CodeBuffer &cbuf) {
   // - call
   __ calculate_address_from_global_toc(reg_scratch, __ method_toc());
   AddressLiteral ic = __ allocate_metadata_address((Metadata *)NULL);
-  __ load_const_from_method_toc(as_Register(Matcher::inline_cache_reg_encode()), ic, reg_scratch);
+  bool success = __ load_const_from_method_toc(as_Register(Matcher::inline_cache_reg_encode()),
+                                               ic, reg_scratch, /*fixed_size*/ true);
+  if (!success) {
+    return NULL; // CodeCache is full
+  }
 
   if (ReoptimizeCallSequences) {
     __ b64_patchable((address)-1, relocInfo::none);
   } else {
     AddressLiteral a((address)-1);
-    __ load_const_from_method_toc(reg_scratch, a, reg_scratch);
+    success = __ load_const_from_method_toc(reg_scratch, a, reg_scratch, /*fixed_size*/ true);
+    if (!success) {
+      return NULL; // CodeCache is full
+    }
     __ mtctr(reg_scratch);
     __ bctr();
   }
@@ -151,6 +158,7 @@ address CompiledStaticCall::emit_to_interp_stub(CodeBuffer &cbuf) {
   return stub;
 #else
   ShouldNotReachHere();
+  return NULL;
 #endif
 }
 #undef __

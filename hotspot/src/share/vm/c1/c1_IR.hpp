@@ -150,6 +150,8 @@ class IRScope: public CompilationResourceObj {
   int           _number_of_locks;                // the number of monitor lock slots needed
   bool          _monitor_pairing_ok;             // the monitor pairing info
   bool          _wrote_final;                    // has written final field
+  bool          _wrote_fields;                   // has written fields
+  bool          _wrote_volatile;                 // has written volatile field
   BlockBegin*   _start;                          // the start block, successsors are method entries
 
   BitMap        _requires_phi_function;          // bit is set if phi functions at loop headers are necessary for a local variable
@@ -184,6 +186,10 @@ class IRScope: public CompilationResourceObj {
   BlockBegin*   start() const                    { return _start; }
   void          set_wrote_final()                { _wrote_final = true; }
   bool          wrote_final    () const          { return _wrote_final; }
+  void          set_wrote_fields()               { _wrote_fields = true; }
+  bool          wrote_fields    () const         { return _wrote_fields; }
+  void          set_wrote_volatile()             { _wrote_volatile = true; }
+  bool          wrote_volatile    () const       { return _wrote_volatile; }
 };
 
 
